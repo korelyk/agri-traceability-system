@@ -1,0 +1,46 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: agri-traceability-system
+  
+  # MySQL配置
+  datasource:
+    url: jdbc:mysql://38.55.34.56:3306/agritrace?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: yjd999999
+  
+  sql:
+    init:
+      mode: always
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.agritrace.entity
+
+# 日志配置
+logging:
+  level:
+    com.agritrace: DEBUG
+    org.springframework.web: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# 区块链配置
+blockchain:
+  difficulty: 4
+  mining-reward: 100
+  block-size: 10
+
+# 应用配置
+app:
+  name: 农产品防伪溯源系统
+  version: 1.0.0
+  description: 基于区块链与数字签名的农产品防伪溯源系统
