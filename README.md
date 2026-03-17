@@ -138,4 +138,6 @@ docker compose up -d --build
 - [毕业论文](documentation/论文-基于区块链与数字签名的农产品防伪溯源系统设计与实现.md)
 - [项目复现文档](documentation/项目复现文档.md)
 - [项目完整思路](documentation/项目完整思路.md)
+- [附录：需求分析与测试用例](documentation/附录-需求分析与测试用例.md)
+- [附录：附件填写参考](documentation/附录-附件填写参考.md)
 - [汇报 PPT 文稿](presentation/汇报PPT-基于区块链与数字签名的农产品防伪溯源系统.md)
