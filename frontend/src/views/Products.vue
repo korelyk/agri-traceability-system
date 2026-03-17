@@ -61,7 +61,7 @@ import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import QrcodeVue from 'qrcode.vue'
 
-const DEFAULT_PUBLIC_BASE_URL = process.env.VUE_APP_PUBLIC_BASE_URL || 'http://38.76.221.36:8088'
+const DEFAULT_PUBLIC_BASE_URL = process.env.VUE_APP_PUBLIC_BASE_URL || 'https://bishe.yyy999.my'
 
 function buildPublicTraceUrl(productId) {
   const baseUrl = DEFAULT_PUBLIC_BASE_URL.replace(/\/+$/, '')

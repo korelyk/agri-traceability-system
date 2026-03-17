@@ -80,7 +80,7 @@
       <el-descriptions-item label="接口地址">同源 /api 代理</el-descriptions-item>
       <el-descriptions-item label="认证方式">JWT Bearer Token</el-descriptions-item>
       <el-descriptions-item label="区块链状态">本地持久化</el-descriptions-item>
-      <el-descriptions-item label="公开访问地址">http://38.76.221.36:8088</el-descriptions-item>
+      <el-descriptions-item label="公开访问地址">https://bishe.yyy999.my</el-descriptions-item>
     </el-descriptions>
   </el-dialog>
 </template>

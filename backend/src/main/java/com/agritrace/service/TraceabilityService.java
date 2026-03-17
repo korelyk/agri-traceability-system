@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
 @Service
 public class TraceabilityService {
 
-    private static final String DEFAULT_PUBLIC_BASE_URL = "http://38.76.221.36:8088";
+    private static final String DEFAULT_PUBLIC_BASE_URL = "https://bishe.yyy999.my";
 
     @Autowired
     private Blockchain blockchain;
