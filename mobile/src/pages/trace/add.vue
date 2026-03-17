@@ -2,7 +2,7 @@
   <view class="add-container">
     <view class="tips">
       <uni-icons type="info" size="20" color="#07c160"></uni-icons>
-      <text class="tips-text">您提交的数据将经过数字签名并写入区块链，全网共识后不可篡改。</text>
+      <text class="tips-text">提交的数据会进行数字签名并写入区块链，写入后不可篡改。</text>
     </view>
     
     <view class="form-box">
@@ -19,17 +19,16 @@
         </uni-forms-item>
         
         <uni-forms-item name="operationDetail" label="操作详情" required>
-          <uni-easyinput type="textarea" v-model="formData.operationDetail" placeholder="请详细描述本次流转操作内容..." :maxlength="200"></uni-easyinput>
+          <uni-easyinput type="textarea" v-model="formData.operationDetail" placeholder="请描述本次操作内容" :maxlength="200"></uni-easyinput>
         </uni-forms-item>
 
-        <!-- Dynamic Fields based on user type or operation type -->
-        <template v-if="formData.operationType === 'PROCESS' || formData.operationType === '加工'">
+        <template v-if="formData.operationType === 'PROCESS'">
           <uni-forms-item name="temperature" label="处理温度">
             <uni-easyinput type="digit" v-model="formData.temperature" placeholder="单位: ℃" />
           </uni-forms-item>
         </template>
         
-        <template v-if="formData.operationType === 'STORAGE' || formData.operationType === '仓储'">
+        <template v-if="formData.operationType === 'STORAGE'">
           <uni-forms-item name="temperature" label="仓储温度">
             <uni-easyinput type="digit" v-model="formData.temperature" placeholder="单位: ℃" />
           </uni-forms-item>
@@ -85,7 +84,6 @@ onLoad((options) => {
 })
 
 const getLocation = () => {
-  // In a real app we would use uni.getLocation. For demo:
   uni.showLoading({ title: '定位中...' })
   setTimeout(() => {
     formData.value.location = '上海市浦东新区张江高科技园区'
@@ -97,28 +95,40 @@ const handleSubmit = async () => {
   try {
     const valid = await formRef.value.validate()
     if (!valid) return
-    
+
     if (!productId.value) {
       return uni.showToast({ title: '无法获取关联产品ID', icon: 'none' })
     }
-    
+
+    const userInfo = uni.getStorageSync('userInfo')
+    if (!userInfo?.userId) {
+      return uni.showToast({ title: '请先登录', icon: 'none' })
+    }
+
     isSubmitting.value = true
-    
+
+    const environmentPayload = {}
+    if (formData.value.temperature) {
+      environmentPayload.temperature = parseFloat(formData.value.temperature)
+    }
+    if (formData.value.humidity) {
+      environmentPayload.humidity = parseFloat(formData.value.humidity)
+    }
+
     const payload = {
       productId: productId.value,
+      operatorId: userInfo.userId,
       operationType: formData.value.operationType,
       operationDetail: formData.value.operationDetail,
       location: formData.value.location,
-      temperature: formData.value.temperature ? parseFloat(formData.value.temperature) : null,
-      humidity: formData.value.humidity ? parseFloat(formData.value.humidity) : null
+      environmentData: Object.keys(environmentPayload).length ? JSON.stringify(environmentPayload) : ''
     }
 
-    const res = await request.post('/api/trace', payload)
-    
+    const res = await request.post('/api/trace/add', payload)
+
     if (res.success) {
-      uni.showToast({ title: '上链成功！', icon: 'success' })
+      uni.showToast({ title: '上链成功', icon: 'success' })
       setTimeout(() => {
-        // Go back to the detail page and trigger reload if necessary
         uni.navigateBack()
       }, 1500)
     }

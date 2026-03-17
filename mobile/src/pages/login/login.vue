@@ -2,7 +2,7 @@
   <view class="login-container">
     <view class="header">
       <text class="title">{{ isLogin ? '工作台登录' : '系统注册' }}</text>
-      <text class="subtitle">农产品溯源系统操作终端</text>
+      <text class="subtitle">农产品溯源系统移动端</text>
     </view>
 
     <view class="form-box">
@@ -13,7 +13,7 @@
         <uni-forms-item name="password" label="密码">
           <uni-easyinput type="password" v-model="formData.password" placeholder="请输入密码" />
         </uni-forms-item>
-        
+
         <template v-if="!isLogin">
           <uni-forms-item name="realName" label="真实姓名">
             <uni-easyinput type="text" v-model="formData.realName" placeholder="请输入真实姓名" />
@@ -22,7 +22,7 @@
             <uni-data-select v-model="formData.userType" :localdata="userTypeOptions"></uni-data-select>
           </uni-forms-item>
           <uni-forms-item name="companyName" label="公司名称">
-            <uni-easyinput type="text" v-model="formData.companyName" placeholder="相关公司/农场名称" />
+            <uni-easyinput type="text" v-model="formData.companyName" placeholder="请输入公司/农场名称" />
           </uni-forms-item>
         </template>
       </uni-forms>
@@ -30,7 +30,7 @@
       <view class="btn-group">
         <button class="submit-btn" type="primary" @click="handleSubmit">{{ isLogin ? '登录' : '注册' }}</button>
       </view>
-      
+
       <view class="switch-mode">
         <text class="link-text" @click="toggleMode">{{ isLogin ? '没有账号？立即注册' : '已有账号？去登录' }}</text>
       </view>
@@ -62,8 +62,7 @@ const userTypeOptions = [
 
 const rules = {
   username: { rules: [{ required: true, errorMessage: '用户名不能为空' }] },
-  password: { rules: [{ required: true, errorMessage: '密码不能为空' }] },
-  realName: { rules: [{ required: !isLogin.value }] }
+  password: { rules: [{ required: true, errorMessage: '密码不能为空' }] }
 }
 
 const toggleMode = () => {
@@ -74,25 +73,22 @@ const handleSubmit = async () => {
   try {
     const valid = await formRef.value.validate()
     if (!valid) return
-    
+
     uni.showLoading({ title: '请求中...' })
-    
+
     if (isLogin.value) {
-      // Login API call
-      // Note: adjust the path if your backend login endpoint is different
-      const res = await request.post('/api/auth/login', {
+      const res = await request.post('/api/users/login', {
         username: formData.value.username,
         password: formData.value.password
       })
-      if (res.success && res.data.token) {
+      if (res.success && res.data?.token) {
         uni.setStorageSync('token', res.data.token)
         uni.setStorageSync('userInfo', res.data.user)
         uni.showToast({ title: '登录成功' })
         setTimeout(() => uni.switchTab({ url: '/pages/index/index' }), 1000)
       }
     } else {
-      // Register API call
-      const res = await request.post('/api/auth/register', formData.value)
+      const res = await request.post('/api/users/register', formData.value)
       if (res.success) {
         uni.showToast({ title: '注册成功，请登录' })
         isLogin.value = true

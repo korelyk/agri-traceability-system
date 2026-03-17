@@ -1,92 +1,90 @@
 package com.agritrace.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
-import com.baomidou.mybatisplus.annotation.*;
 import java.time.LocalDateTime;
 
-/**
- * 用户实体类
- * 系统用户（生产者、加工商、物流商、销售商、管理员等）
- */
 @Data
-@TableName( "users")
+@TableName("users")
 public class User {
-    
-        @TableId(value = "user_id", type = IdType.INPUT)
-    private String userId;              // 用户ID
-    
+
+    @TableId(value = "user_id", type = IdType.INPUT)
+    private String userId;
+
     @TableField("username")
-    private String username;            // 用户名
-    
+    private String username;
+
     @TableField("password")
-    private String password;            // 密码（加密存储）
-    
+    @JsonIgnore
+    private String password;
+
     @TableField("real_name")
-    private String realName;            // 真实姓名
-    
+    private String realName;
+
     @TableField("email")
-    private String email;               // 邮箱
-    
+    private String email;
+
     @TableField("phone")
-    private String phone;               // 电话
-    
+    private String phone;
+
     @TableField("user_type")
-    private String userType;            // 用户类型
-    
+    private String userType;
+
     @TableField("company_name")
-    private String companyName;         // 公司名称
-    
+    private String companyName;
+
     @TableField("company_code")
-    private String companyCode;         // 公司编码
-    
+    private String companyCode;
+
     @TableField("business_license")
-    private String businessLicense;     // 营业执照号
-    
+    private String businessLicense;
+
     @TableField("address")
-    private String address;             // 地址
-    
+    private String address;
+
     @TableField("region_code")
-    private String regionCode;          // 地区编码
-    
+    private String regionCode;
+
     @TableField("public_key")
-    private String publicKey;           // RSA公钥
-    
+    private String publicKey;
+
     @TableField("private_key")
-    private String privateKey;          // RSA私钥（加密存储）
-    
+    @JsonIgnore
+    private String privateKey;
+
     @TableField("blockchain_address")
-    private String blockchainAddress;   // 区块链地址
-    
+    private String blockchainAddress;
+
     @TableField("certificate_hash")
-    private String certificateHash;     // 证书哈希
-    
+    private String certificateHash;
+
     @TableField("is_verified")
-    private boolean verified;           // 是否已认证
-    
+    private boolean verified;
+
     @TableField("is_active")
-    private boolean active;             // 是否激活
-    
+    private boolean active;
+
     @TableField("role")
-    private String role;                // 角色（ADMIN/OPERATOR/VIEWER）
-    
+    private String role;
+
     @TableField("created_at")
-    private LocalDateTime createdAt;    // 创建时间
-    
+    private LocalDateTime createdAt;
+
     @TableField("last_login")
-    private LocalDateTime lastLogin;    // 最后登录时间
-    
+    private LocalDateTime lastLogin;
+
     public User() {
         this.createdAt = LocalDateTime.now();
         this.active = true;
         this.verified = false;
     }
-    
-    /**
-     * 创建用户
-     */
-    public static User create(String username, String password, 
-                               String realName, String userType) {
+
+    public static User create(String username, String password, String realName, String userType) {
         User user = new User();
         user.setUserId(java.util.UUID.randomUUID().toString());
         user.setUsername(username);
@@ -96,25 +94,16 @@ public class User {
         user.setRole("OPERATOR");
         return user;
     }
-    
-    /**
-     * 设置密钥对
-     */
+
     public void setKeyPair(String publicKey, String privateKey) {
         this.publicKey = publicKey;
         this.privateKey = privateKey;
     }
-    
-    /**
-     * 更新登录时间
-     */
+
     public void updateLastLogin() {
         this.lastLogin = LocalDateTime.now();
     }
-    
-    /**
-     * 获取用户类型中文名称
-     */
+
     public String getUserTypeName() {
         switch (userType) {
             case "PRODUCER":
@@ -124,7 +113,7 @@ public class User {
             case "LOGISTICS":
                 return "物流商";
             case "RETAILER":
-                return "销售商";
+                return "零售商";
             case "INSPECTOR":
                 return "检测机构";
             case "ADMIN":
@@ -132,18 +121,5 @@ public class User {
             default:
                 return userType;
         }
-    }
-    
-    @Override
-    public String toString() {
-        return "User{" +
-                "userId='" + userId + '\'' +
-                ", username='" + username + '\'' +
-                ", realName='" + realName + '\'' +
-                ", userType='" + userType + '\'' +
-                ", companyName='" + companyName + '\'' +
-                ", verified=" + verified +
-                ", active=" + active +
-                '}';
     }
 }

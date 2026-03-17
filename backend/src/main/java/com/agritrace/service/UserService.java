@@ -1,10 +1,13 @@
 package com.agritrace.service;
 
+import com.agritrace.config.JwtUtil;
 import com.agritrace.crypto.DigitalSignature;
+import com.agritrace.dto.UserView;
 import com.agritrace.entity.User;
 import com.agritrace.mapper.UserMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -12,9 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * 用户服务类
- */
 @Service
 public class UserService {
 
@@ -24,102 +24,79 @@ public class UserService {
     @Autowired
     private DigitalSignature digitalSignature;
 
-    /**
-     * 用户注册
-     */
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
     public User registerUser(String username, String password, String realName,
             String userType, String companyName, String email, String phone) {
-        // 检查用户名是否已存在
         if (userMapper.exists(new LambdaQueryWrapper<User>().eq(User::getUsername, username))) {
             throw new RuntimeException("用户名已存在");
         }
 
-        // 创建用户
         User user = User.create(username, password, realName, userType);
+        user.setPassword(passwordEncoder.encode(password));
         user.setCompanyName(companyName);
         user.setEmail(email);
         user.setPhone(phone);
 
-        // 生成RSA密钥对
         Map<String, String> keys = DigitalSignature.KeyPairGenerator.generateKeyPair();
         user.setKeyPair(keys.get("publicKey"), keys.get("privateKey"));
+        user.setBlockchainAddress(digitalSignature.generateAddress(keys.get("publicKey")));
 
-        // 生成区块链地址
-        String address = digitalSignature.generateAddress(keys.get("publicKey"));
-        user.setBlockchainAddress(address);
-
-        // 保存用户
         userMapper.insert(user);
         return user;
     }
 
-    /**
-     * 用户登录
-     */
     public Map<String, Object> login(String username, String password) {
         User user = Optional.ofNullable(userMapper.selectOne(new LambdaQueryWrapper<User>()
-                .eq(User::getUsername, username)
-                .eq(User::getPassword, password)))
+                .eq(User::getUsername, username)))
                 .orElseThrow(() -> new RuntimeException("用户名或密码错误"));
+
+        if (!matchesPassword(password, user)) {
+            throw new RuntimeException("用户名或密码错误");
+        }
 
         if (!user.isActive()) {
             throw new RuntimeException("账户已被禁用");
         }
 
-        // 更新登录时间
+        upgradePasswordIfNeeded(user, password);
+
         user.updateLastLogin();
         userMapper.updateById(user);
 
-        // 构建返回数据（不包含私钥）
         Map<String, Object> result = new HashMap<>();
-        result.put("userId", user.getUserId());
-        result.put("username", user.getUsername());
-        result.put("realName", user.getRealName());
-        result.put("userType", user.getUserType());
-        result.put("userTypeName", user.getUserTypeName());
-        result.put("companyName", user.getCompanyName());
-        result.put("blockchainAddress", user.getBlockchainAddress());
-        result.put("publicKey", user.getPublicKey());
-        result.put("verified", user.isVerified());
-        result.put("role", user.getRole());
-
+        result.put("token", jwtUtil.generateToken(user));
+        result.put("user", toUserView(user));
         return result;
     }
 
-    /**
-     * 根据ID获取用户
-     */
     public User getUserById(String userId) {
         return Optional.ofNullable(userMapper.selectById(userId))
                 .orElseThrow(() -> new RuntimeException("用户不存在"));
     }
 
-    /**
-     * 根据用户名获取用户
-     */
     public User getUserByUsername(String username) {
         return Optional.ofNullable(userMapper.selectOne(new LambdaQueryWrapper<User>()
                 .eq(User::getUsername, username)))
                 .orElseThrow(() -> new RuntimeException("用户不存在"));
     }
 
-    /**
-     * 获取所有用户
-     */
-    public List<User> getAllUsers() {
-        return userMapper.selectList(null);
+    public List<UserView> getAllUsers() {
+        return userMapper.selectList(null).stream()
+                .map(this::toUserView)
+                .toList();
     }
 
-    /**
-     * 根据类型获取用户
-     */
-    public List<User> getUsersByType(String userType) {
-        return userMapper.selectList(new LambdaQueryWrapper<User>().eq(User::getUserType, userType));
+    public List<UserView> getUsersByType(String userType) {
+        return userMapper.selectList(new LambdaQueryWrapper<User>().eq(User::getUserType, userType)).stream()
+                .map(this::toUserView)
+                .toList();
     }
 
-    /**
-     * 更新用户信息
-     */
     public User updateUser(String userId, Map<String, String> updates) {
         User user = getUserById(userId);
 
@@ -140,9 +117,6 @@ public class UserService {
         return user;
     }
 
-    /**
-     * 验证用户
-     */
     public User verifyUser(String userId) {
         User user = getUserById(userId);
         user.setVerified(true);
@@ -150,9 +124,6 @@ public class UserService {
         return user;
     }
 
-    /**
-     * 禁用/启用用户
-     */
     public User toggleUserStatus(String userId) {
         User user = getUserById(userId);
         user.setActive(!user.isActive());
@@ -160,24 +131,16 @@ public class UserService {
         return user;
     }
 
-    /**
-     * 删除用户
-     */
     public void deleteUser(String userId) {
         userMapper.deleteById(userId);
     }
 
-    /**
-     * 获取用户统计信息
-     */
     public Map<String, Object> getUserStatistics() {
         Map<String, Object> stats = new HashMap<>();
-
         stats.put("totalUsers", userMapper.selectCount(null));
         stats.put("verifiedUsers", userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::isVerified, true)));
         stats.put("activeUsers", userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::isActive, true)));
 
-        // 按类型统计
         Map<String, Long> byType = new HashMap<>();
         for (User user : userMapper.selectList(null)) {
             String type = user.getUserType();
@@ -186,5 +149,30 @@ public class UserService {
         stats.put("usersByType", byType);
 
         return stats;
+    }
+
+    public UserView toUserView(User user) {
+        return UserView.from(user);
+    }
+
+    private boolean matchesPassword(String rawPassword, User user) {
+        String storedPassword = user.getPassword();
+        if (storedPassword == null || storedPassword.isEmpty()) {
+            return false;
+        }
+        if (isEncodedPassword(storedPassword)) {
+            return passwordEncoder.matches(rawPassword, storedPassword);
+        }
+        return storedPassword.equals(rawPassword);
+    }
+
+    private void upgradePasswordIfNeeded(User user, String rawPassword) {
+        if (!isEncodedPassword(user.getPassword())) {
+            user.setPassword(passwordEncoder.encode(rawPassword));
+        }
+    }
+
+    private boolean isEncodedPassword(String password) {
+        return password.startsWith("$2a$") || password.startsWith("$2b$") || password.startsWith("$2y$");
     }
 }

@@ -384,4 +384,9 @@ public class TraceabilityService {
         }
         return digitalSignature.verifyTransaction(tx);
     }
+
+    public List<Product> getAllProducts() {
+        return productMapper.selectList(new LambdaQueryWrapper<Product>()
+                .orderByDesc(Product::getCreatedAt));
+    }
 }

@@ -5,48 +5,36 @@
       <h1>农产品防伪溯源查询</h1>
       <p>基于区块链与数字签名技术</p>
     </div>
-    
+
     <el-card class="search-card">
-      <el-input
-        v-model="searchQuery"
-        placeholder="请输入产品ID"
-        size="large"
-        class="search-input"
-      >
+      <el-input v-model="searchQuery" placeholder="请输入产品ID" size="large" class="search-input">
         <template #append>
-          <el-button type="primary" @click="handleSearch">
-            <el-icon><Search /></el-icon> 查询
+          <el-button type="primary" @click="handleSearch" :loading="loading">
+            <el-icon><Search /></el-icon>
+            查询
           </el-button>
         </template>
       </el-input>
     </el-card>
-    
+
     <div v-if="traceResult" class="result-section">
       <el-card>
         <template #header>
           <div class="result-header">
             <span>溯源结果</span>
             <el-tag :type="traceResult.verified ? 'success' : 'warning'">
-              {{ traceResult.verified ? '正品验证' : '未验证' }}
+              {{ traceResult.verified ? '验证通过' : '数据异常' }}
             </el-tag>
           </div>
         </template>
-        
+
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="产品名称">
-            {{ traceResult.productName }}
-          </el-descriptions-item>
-          <el-descriptions-item label="产品类别">
-            {{ traceResult.category }}
-          </el-descriptions-item>
-          <el-descriptions-item label="生产者">
-            {{ traceResult.producer }}
-          </el-descriptions-item>
-          <el-descriptions-item label="产地">
-            {{ traceResult.origin }}
-          </el-descriptions-item>
+          <el-descriptions-item label="产品名称">{{ traceResult.productName }}</el-descriptions-item>
+          <el-descriptions-item label="产品类别">{{ traceResult.category }}</el-descriptions-item>
+          <el-descriptions-item label="生产者">{{ traceResult.producer }}</el-descriptions-item>
+          <el-descriptions-item label="产地">{{ traceResult.origin }}</el-descriptions-item>
         </el-descriptions>
-        
+
         <h3 class="timeline-title">溯源历程</h3>
         <el-timeline>
           <el-timeline-item
@@ -58,95 +46,86 @@
             <el-card>
               <h4>{{ item.stage }}</h4>
               <p>{{ item.detail }}</p>
-              <p>操作者: {{ item.operator }}</p>
+              <p>操作人: {{ item.operator }}</p>
               <p>地点: {{ item.location }}</p>
             </el-card>
           </el-timeline-item>
         </el-timeline>
-        
+
         <div class="verification-info">
-          <el-alert
-            title="区块链验证信息"
-            type="success"
-            :closable="false"
-          >
+          <el-alert title="链上验证信息" type="success" :closable="false">
             <p>区块哈希: {{ traceResult.blockHash }}</p>
             <p>交易ID: {{ traceResult.transactionId }}</p>
-            <p>数字签名: {{ traceResult.signature }}</p>
+            <p>数字签名: {{ traceResult.signature || '无' }}</p>
           </el-alert>
         </div>
       </el-card>
-    </div>
-    
-    <div class="footer">
-      <p>© 2024 农产品防伪溯源系统 - 保障食品安全，追溯每一环节</p>
     </div>
   </div>
 </template>
 
 <script>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useStore } from 'vuex'
+import { ElMessage } from 'element-plus'
 
 export default {
   name: 'PublicTrace',
   setup() {
+    const route = useRoute()
+    const store = useStore()
     const searchQuery = ref('')
     const traceResult = ref(null)
-    
-    const handleSearch = () => {
-      // 模拟查询结果
-      traceResult.value = {
-        verified: true,
-        productName: '山东红富士苹果',
-        category: '水果',
-        producer: '山东果园有限公司',
-        origin: '山东烟台',
-        blockHash: '0000a1b2c3d4e5f6...',
-        transactionId: 'tx123456789',
-        signature: '0xabcdef123456...',
-        history: [
-          {
-            stage: '生产',
-            time: '2024-01-01 08:00:00',
-            detail: '苹果种植，使用有机肥料',
-            operator: '张三',
-            location: '山东烟台果园'
-          },
-          {
-            stage: '采摘',
-            time: '2024-01-15 10:00:00',
-            detail: '成熟苹果采摘，质量检测合格',
-            operator: '李四',
-            location: '山东烟台果园'
-          },
-          {
-            stage: '加工',
-            time: '2024-01-16 14:00:00',
-            detail: '清洗、分级、包装',
-            operator: '王五',
-            location: '烟台加工厂'
-          },
-          {
-            stage: '运输',
-            time: '2024-01-17 06:00:00',
-            detail: '冷链运输，温度: 4°C',
-            operator: '赵六',
-            location: '烟台 -> 北京'
-          },
-          {
-            stage: '销售',
-            time: '2024-01-18 09:00:00',
-            detail: '上架销售',
-            operator: '钱七',
-            location: '北京某超市'
-          }
-        ]
+    const loading = ref(false)
+
+    const mapResult = (data) => ({
+      verified: data.blockchainValid && data.dataConsistent,
+      productName: data.product?.productName,
+      category: data.product?.productCategory,
+      producer: data.product?.producerName,
+      origin: data.product?.origin,
+      blockHash: data.product?.blockHash,
+      transactionId: data.product?.transactionId,
+      signature: data.traceHistory?.[0]?.digitalSignature,
+      history: (data.traceHistory || []).map((record) => ({
+        stage: record.operationTypeName || record.operationType,
+        time: record.operationTime ? new Date(record.operationTime).toLocaleString('zh-CN') : '',
+        detail: record.operationDetail,
+        operator: record.operatorName,
+        location: record.location
+      }))
+    })
+
+    const handleSearch = async () => {
+      if (!searchQuery.value.trim()) {
+        ElMessage.warning('请输入产品ID')
+        return
+      }
+
+      loading.value = true
+      const result = await store.dispatch('traceProduct', searchQuery.value.trim())
+      loading.value = false
+
+      if (result.success) {
+        traceResult.value = mapResult(result.data)
+      } else {
+        traceResult.value = null
+        ElMessage.error(result.message || '查询失败')
       }
     }
-    
+
+    onMounted(() => {
+      if (route.params.productId) {
+        searchQuery.value = route.params.productId
+        handleSearch()
+      }
+    })
+
     return {
       searchQuery,
       traceResult,
+      loading,
       handleSearch
     }
   }
@@ -204,12 +183,5 @@ export default {
 
 .verification-info {
   margin-top: 30px;
-}
-
-.footer {
-  text-align: center;
-  color: #fff;
-  margin-top: 40px;
-  opacity: 0.8;
 }
 </style>
