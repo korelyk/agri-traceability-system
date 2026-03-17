@@ -73,7 +73,3 @@ CREATE TABLE IF NOT EXISTS trace_records (
     created_at DATETIME,
     verified BOOLEAN DEFAULT FALSE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE INDEX idx_products_producer_id ON products(producer_id);
-CREATE INDEX idx_trace_records_product_id ON trace_records(product_id);
-CREATE INDEX idx_trace_records_operation_time ON trace_records(operation_time);
