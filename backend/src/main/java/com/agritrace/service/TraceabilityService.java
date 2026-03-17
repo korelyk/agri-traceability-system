@@ -17,6 +17,7 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +39,8 @@ import java.util.stream.Collectors;
 @Service
 public class TraceabilityService {
 
+    private static final String DEFAULT_PUBLIC_BASE_URL = "http://38.76.221.36:8088";
+
     @Autowired
     private Blockchain blockchain;
 
@@ -55,6 +58,9 @@ public class TraceabilityService {
 
     @Autowired
     private KeySecurityService keySecurityService;
+
+    @Value("${app.public-base-url:" + DEFAULT_PUBLIC_BASE_URL + "}")
+    private String publicBaseUrl;
 
     @Transactional
     public Product registerProduct(String productName, String productCategory,
@@ -232,7 +238,7 @@ public class TraceabilityService {
     }
 
     private String generateQRCode(String productId) {
-        String traceUrl = "https://bishe.yyy999.my/public-trace/" + productId;
+        String traceUrl = buildPublicTraceUrl(productId);
 
         try {
             QRCodeWriter qrCodeWriter = new QRCodeWriter();
@@ -249,6 +255,15 @@ public class TraceabilityService {
         } catch (Exception ex) {
             throw new RuntimeException("生成二维码失败", ex);
         }
+    }
+
+    private String buildPublicTraceUrl(String productId) {
+        String baseUrl = publicBaseUrl;
+        if (baseUrl == null || baseUrl.isBlank()) {
+            baseUrl = DEFAULT_PUBLIC_BASE_URL;
+        }
+        baseUrl = baseUrl.trim().replaceAll("/+$", "");
+        return baseUrl + "/public-trace/" + productId;
     }
 
     private void parseEnvironmentData(TraceRecord record, String environmentData) {

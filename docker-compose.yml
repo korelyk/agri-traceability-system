@@ -29,6 +29,7 @@ services:
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       APP_KEY_SECRET: ${APP_KEY_SECRET}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://38.76.221.36:8088}
       BLOCKCHAIN_STATE_FILE: /data/blockchain-state.json
       TZ: Asia/Shanghai
     depends_on:
@@ -44,6 +45,7 @@ services:
       context: ./frontend
       args:
         VUE_APP_API_BASE_URL: /api
+        VUE_APP_PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://38.76.221.36:8088}
     container_name: agri-trace-frontend
     restart: unless-stopped
     depends_on:

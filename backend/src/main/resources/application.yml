@@ -38,6 +38,7 @@ blockchain:
 app:
   name: Agri Traceability System
   version: 1.0.0
+  public-base-url: ${PUBLIC_BASE_URL:http://38.76.221.36:8088}
   description: 基于区块链与数字签名的农产品防伪溯源系统
   security:
     jwt-secret: ${JWT_SECRET:change-this-jwt-secret-before-production}

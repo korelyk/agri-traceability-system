@@ -39,8 +39,15 @@
 
     <el-dialog v-model="qrDialogVisible" title="产品二维码" width="400px" center>
       <div class="qr-code-container">
-        <img v-if="currentQRCode" :src="currentQRCode" alt="QR Code" style="width: 250px; height: 250px;" />
-        <p class="qr-hint">扫描二维码查看公开溯源信息</p>
+        <qrcode-vue
+          v-if="currentQRCodeUrl"
+          :value="currentQRCodeUrl"
+          :size="250"
+          level="H"
+          render-as="svg"
+        />
+        <p class="qr-hint">请扫描二维码查看公开溯源信息</p>
+        <p class="qr-link">{{ currentQRCodeUrl }}</p>
       </div>
     </el-dialog>
   </div>
@@ -51,16 +58,29 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
+import QrcodeVue from 'qrcode.vue'
+
+const DEFAULT_PUBLIC_BASE_URL = process.env.VUE_APP_PUBLIC_BASE_URL || 'http://38.76.221.36:8088'
+
+function buildPublicTraceUrl(productId) {
+  const baseUrl = DEFAULT_PUBLIC_BASE_URL.replace(/\/+$/, '')
+  return `${baseUrl}/public-trace/${productId}`
+}
 
 export default {
   name: 'Products',
+  components: {
+    Plus,
+    QrcodeVue
+  },
   setup() {
     const router = useRouter()
     const store = useStore()
     const products = ref([])
     const loading = ref(false)
     const qrDialogVisible = ref(false)
-    const currentQRCode = ref('')
+    const currentQRCodeUrl = ref('')
 
     const fetchProducts = async () => {
       loading.value = true
@@ -103,7 +123,7 @@ export default {
     }
 
     const viewQRCode = (product) => {
-      currentQRCode.value = product.qrCode
+      currentQRCodeUrl.value = buildPublicTraceUrl(product.productId)
       qrDialogVisible.value = true
     }
 
@@ -113,7 +133,7 @@ export default {
       products,
       loading,
       qrDialogVisible,
-      currentQRCode,
+      currentQRCodeUrl,
       getStatusType,
       getStatusText,
       viewTrace,
@@ -142,5 +162,12 @@ export default {
 .qr-hint {
   margin-top: 15px;
   color: #909399;
+}
+
+.qr-link {
+  margin-top: 12px;
+  color: #606266;
+  font-size: 12px;
+  word-break: break-all;
 }
 </style>

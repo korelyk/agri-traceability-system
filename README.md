@@ -77,7 +77,7 @@ npm install
 npm run dev:h5
 ```
 
-移动端默认请求地址为部署域名 `https://bishe.yyy999.my`，也可以在运行时通过本地存储覆盖 `apiBaseUrl`。
+移动端默认请求地址为临时安全地址 `http://38.76.221.36:8088`，也可以在运行时通过本地存储覆盖 `apiBaseUrl`。
 
 ## Docker 部署
 
@@ -108,8 +108,8 @@ docker compose up -d --build
 
 ## 已部署演示地址
 
-- Web：`https://bishe.yyy999.my`
-- 后端健康检查：`https://bishe.yyy999.my/api/health`
+- Web：`http://38.76.221.36:8088`
+- 后端健康检查：`http://38.76.221.36:8088/api/health`
 
 演示账号：
 
