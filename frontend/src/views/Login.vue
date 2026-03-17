@@ -6,10 +6,10 @@
         <h1 class="title">农产品防伪溯源系统</h1>
         <p class="subtitle">基于区块链与数字签名技术</p>
       </div>
-      
+
       <el-tabs v-model="activeTab" class="login-tabs">
         <el-tab-pane label="登录" name="login">
-          <el-form :model="loginForm" :rules="loginRules" ref="loginFormRef">
+          <el-form ref="loginFormRef" :model="loginForm" :rules="loginRules">
             <el-form-item prop="username">
               <el-input
                 v-model="loginForm.username"
@@ -41,9 +41,9 @@
             </el-form-item>
           </el-form>
         </el-tab-pane>
-        
+
         <el-tab-pane label="注册" name="register">
-          <el-form :model="registerForm" :rules="registerRules" ref="registerFormRef">
+          <el-form ref="registerFormRef" :model="registerForm" :rules="registerRules">
             <el-form-item prop="username">
               <el-input
                 v-model="registerForm.username"
@@ -110,17 +110,17 @@
         </el-tab-pane>
       </el-tabs>
     </div>
-    
+
     <div class="login-footer">
-      <p>© 2024 农产品防伪溯源系统 - 基于区块链与数字签名技术</p>
+      <p>© 2026 农产品防伪溯源系统 - 基于区块链与数字签名技术</p>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, reactive } from 'vue'
-import { useStore } from 'vuex'
+import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
 
 export default {
@@ -128,17 +128,17 @@ export default {
   setup() {
     const store = useStore()
     const router = useRouter()
-    
+
     const activeTab = ref('login')
     const loading = ref(false)
     const loginFormRef = ref(null)
     const registerFormRef = ref(null)
-    
+
     const loginForm = reactive({
       username: '',
       password: ''
     })
-    
+
     const registerForm = reactive({
       username: '',
       password: '',
@@ -147,20 +147,20 @@ export default {
       userType: '',
       companyName: ''
     })
-    
+
     const validateConfirmPassword = (rule, value, callback) => {
       if (value !== registerForm.password) {
         callback(new Error('两次输入的密码不一致'))
-      } else {
-        callback()
+        return
       }
+      callback()
     }
-    
+
     const loginRules = {
       username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
       password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
     }
-    
+
     const registerRules = {
       username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
       password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
@@ -172,39 +172,45 @@ export default {
       userType: [{ required: true, message: '请选择用户类型', trigger: 'change' }],
       companyName: [{ required: true, message: '请输入公司名称', trigger: 'blur' }]
     }
-    
+
     const handleLogin = async () => {
       const valid = await loginFormRef.value.validate().catch(() => false)
-      if (!valid) return
-      
+      if (!valid) {
+        return
+      }
+
       loading.value = true
       const result = await store.dispatch('login', loginForm)
       loading.value = false
-      
+
       if (result.success) {
         ElMessage.success('登录成功')
         router.push('/dashboard')
-      } else {
-        ElMessage.error(result.message)
+        return
       }
+
+      ElMessage.error(result.message)
     }
-    
+
     const handleRegister = async () => {
       const valid = await registerFormRef.value.validate().catch(() => false)
-      if (!valid) return
-      
+      if (!valid) {
+        return
+      }
+
       loading.value = true
       const result = await store.dispatch('register', registerForm)
       loading.value = false
-      
+
       if (result.success) {
         ElMessage.success('注册成功，请登录')
         activeTab.value = 'login'
-      } else {
-        ElMessage.error(result.message)
+        return
       }
+
+      ElMessage.error(result.message)
     }
-    
+
     return {
       activeTab,
       loading,
