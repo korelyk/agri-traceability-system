@@ -232,7 +232,7 @@ public class TraceabilityService {
     }
 
     private String generateQRCode(String productId) {
-        String traceUrl = "https://bishe.yyy999.my/#/public-trace?productId=" + productId;
+        String traceUrl = "https://bishe.yyy999.my/public-trace/" + productId;
 
         try {
             QRCodeWriter qrCodeWriter = new QRCodeWriter();

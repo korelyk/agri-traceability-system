@@ -7,7 +7,7 @@
     </div>
 
     <el-card class="search-card">
-      <el-input v-model="searchQuery" placeholder="请输入产品ID" size="large" class="search-input">
+      <el-input v-model="searchQuery" placeholder="请输入产品 ID" size="large" class="search-input">
         <template #append>
           <el-button type="primary" @click="handleSearch" :loading="loading">
             <el-icon><Search /></el-icon>
@@ -35,7 +35,7 @@
           <el-descriptions-item label="产地">{{ traceResult.origin }}</el-descriptions-item>
         </el-descriptions>
 
-        <h3 class="timeline-title">溯源历程</h3>
+        <h3 class="timeline-title">溯源过程</h3>
         <el-timeline>
           <el-timeline-item
             v-for="(item, index) in traceResult.history"
@@ -55,7 +55,7 @@
         <div class="verification-info">
           <el-alert title="链上验证信息" type="success" :closable="false">
             <p>区块哈希: {{ traceResult.blockHash }}</p>
-            <p>交易ID: {{ traceResult.transactionId }}</p>
+            <p>交易 ID: {{ traceResult.transactionId }}</p>
             <p>数字签名: {{ traceResult.signature || '无' }}</p>
           </el-alert>
         </div>
@@ -65,10 +65,19 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+
+const operationOrder = {
+  PRODUCE: 1,
+  PROCESS: 2,
+  PACKAGE: 3,
+  STORAGE: 4,
+  TRANSPORT: 5,
+  SALE: 6
+}
 
 export default {
   name: 'PublicTrace',
@@ -79,27 +88,40 @@ export default {
     const traceResult = ref(null)
     const loading = ref(false)
 
-    const mapResult = (data) => ({
-      verified: data.blockchainValid && data.dataConsistent,
-      productName: data.product?.productName,
-      category: data.product?.productCategory,
-      producer: data.product?.producerName,
-      origin: data.product?.origin,
-      blockHash: data.product?.blockHash,
-      transactionId: data.product?.transactionId,
-      signature: data.traceHistory?.[0]?.digitalSignature,
-      history: (data.traceHistory || []).map((record) => ({
-        stage: record.operationTypeName || record.operationType,
-        time: record.operationTime ? new Date(record.operationTime).toLocaleString('zh-CN') : '',
-        detail: record.operationDetail,
-        operator: record.operatorName,
-        location: record.location
-      }))
-    })
+    const mapResult = (data) => {
+      const history = [...(data.traceHistory || [])]
+        .sort((a, b) => {
+          const timeA = a.operationTime ? new Date(a.operationTime).getTime() : 0
+          const timeB = b.operationTime ? new Date(b.operationTime).getTime() : 0
+          if (timeA !== timeB) {
+            return timeA - timeB
+          }
+          return (operationOrder[a.operationType] || 99) - (operationOrder[b.operationType] || 99)
+        })
+        .map((record) => ({
+          stage: record.operationTypeName || record.operationType,
+          time: record.operationTime ? new Date(record.operationTime).toLocaleString('zh-CN') : '',
+          detail: record.operationDetail,
+          operator: record.operatorName,
+          location: record.location
+        }))
+
+      return {
+        verified: data.blockchainValid && data.dataConsistent,
+        productName: data.product?.productName,
+        category: data.product?.productCategory,
+        producer: data.product?.producerName,
+        origin: data.product?.origin,
+        blockHash: data.product?.blockHash,
+        transactionId: data.product?.transactionId,
+        signature: data.traceHistory?.[0]?.digitalSignature,
+        history
+      }
+    }
 
     const handleSearch = async () => {
       if (!searchQuery.value.trim()) {
-        ElMessage.warning('请输入产品ID')
+        ElMessage.warning('请输入产品 ID')
         return
       }
 
@@ -115,18 +137,22 @@ export default {
       }
     }
 
-    onMounted(() => {
-      if (route.params.productId) {
-        searchQuery.value = route.params.productId
+    const syncProductIdFromRoute = () => {
+      const productId = route.params.productId || route.query.productId
+      if (productId) {
+        searchQuery.value = productId
         handleSearch()
       }
-    })
+    }
+
+    onMounted(syncProductIdFromRoute)
+    watch(() => [route.params.productId, route.query.productId], syncProductIdFromRoute)
 
     return {
-      searchQuery,
-      traceResult,
+      handleSearch,
       loading,
-      handleSearch
+      searchQuery,
+      traceResult
     }
   }
 }

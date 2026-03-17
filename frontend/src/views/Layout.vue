@@ -26,8 +26,13 @@
     <el-container>
       <el-header class="header">
         <div class="header-left">
-          <breadcrumb />
+          <el-breadcrumb separator="/">
+            <el-breadcrumb-item v-for="item in breadcrumbs" :key="item.path">
+              {{ item.title }}
+            </el-breadcrumb-item>
+          </el-breadcrumb>
         </div>
+
         <div class="header-right">
           <el-dropdown @command="handleCommand">
             <span class="user-info">
@@ -55,9 +60,9 @@
   <el-dialog v-model="profileVisible" title="个人信息" width="420px">
     <el-descriptions :column="1" border>
       <el-descriptions-item label="用户名">{{ user?.username || '-' }}</el-descriptions-item>
-      <el-descriptions-item label="姓名">{{ user?.realName || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="姓名">{{ readableValue(user?.realName) }}</el-descriptions-item>
       <el-descriptions-item label="角色">{{ user?.userTypeName || user?.userType || '-' }}</el-descriptions-item>
-      <el-descriptions-item label="企业">{{ user?.companyName || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="企业">{{ readableValue(user?.companyName) }}</el-descriptions-item>
       <el-descriptions-item label="邮箱">{{ user?.email || '-' }}</el-descriptions-item>
       <el-descriptions-item label="电话">{{ user?.phone || '-' }}</el-descriptions-item>
     </el-descriptions>
@@ -82,26 +87,45 @@
 
 <script>
 import { computed, ref } from 'vue'
-import { ElMessage } from 'element-plus'
 import { useStore } from 'vuex'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+
+function isReadableText(value) {
+  return value && typeof value === 'string' && value.trim() && !/^\?+$/.test(value)
+}
 
 export default {
   name: 'Layout',
   setup() {
     const store = useStore()
+    const route = useRoute()
     const router = useRouter()
 
     const profileVisible = ref(false)
     const settingsVisible = ref(false)
     const user = computed(() => store.state.user)
+
+    const readableValue = (value) => (isReadableText(value) ? value : '-')
+
     const displayName = computed(() => {
       const currentUser = user.value
       if (!currentUser) {
         return '用户'
       }
-      return currentUser.realName || currentUser.username || currentUser.companyName || '用户'
+      const candidates = [
+        currentUser.realName,
+        currentUser.username,
+        currentUser.companyName
+      ]
+      return candidates.find((value) => isReadableText(value)) || '用户'
     })
+
+    const breadcrumbs = computed(() => route.matched
+      .filter((item) => item.meta?.title)
+      .map((item) => ({
+        path: item.path,
+        title: item.meta.title
+      })))
 
     const menuItems = [
       { path: '/dashboard', title: '系统概览', icon: 'Odometer' },
@@ -124,16 +148,16 @@ export default {
         case 'settings':
           settingsVisible.value = true
           break
-        default:
-          ElMessage.info('功能暂未开放')
       }
     }
 
     return {
+      breadcrumbs,
       displayName,
       handleCommand,
       menuItems,
       profileVisible,
+      readableValue,
       settingsVisible,
       user
     }
