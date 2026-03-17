@@ -1,110 +1,123 @@
 <template>
   <div class="statistics-page">
-    <!-- 系统概览 -->
-    <el-row :gutter="20" class="overview-row">
-      <el-col :span="8">
-        <el-card>
-          <template #header>
-            <span>产品统计</span>
-          </template>
-          <div class="chart-container" ref="productChart"></div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
-        <el-card>
-          <template #header>
-            <span>溯源记录统计</span>
-          </template>
-          <div class="chart-container" ref="traceChart"></div>
-        </el-card>
-      </el-col>
-      <el-col :span="8">
-        <el-card>
-          <template #header>
-            <span>用户统计</span>
-          </template>
-          <div class="chart-container" ref="userChart"></div>
+    <el-row :gutter="20" class="summary-row">
+      <el-col :span="6" v-for="item in summaryCards" :key="item.label">
+        <el-card class="summary-card" shadow="hover">
+          <div class="summary-item">
+            <el-icon :size="36" :color="item.color">
+              <component :is="item.icon" />
+            </el-icon>
+            <div class="summary-content">
+              <div class="summary-value">{{ item.value }}</div>
+              <div class="summary-label">{{ item.label }}</div>
+            </div>
+          </div>
         </el-card>
       </el-col>
     </el-row>
-    
-    <!-- 区块链统计 -->
-    <el-card class="blockchain-stats">
-      <template #header>
-        <span>区块链统计</span>
-      </template>
-      <el-row :gutter="20">
-        <el-col :span="6">
-          <div class="stat-card-item">
-            <el-icon size="48" color="#409EFF"><Link /></el-icon>
-            <div class="stat-info">
-              <div class="stat-value">{{ statistics?.totalBlocks || 0 }}</div>
-              <div class="stat-label">总区块数</div>
+
+    <el-row :gutter="20" class="summary-row">
+      <el-col :span="6" v-for="item in blockchainCards" :key="item.label">
+        <el-card class="summary-card" shadow="hover">
+          <div class="summary-item">
+            <el-icon :size="36" :color="item.color">
+              <component :is="item.icon" />
+            </el-icon>
+            <div class="summary-content">
+              <div class="summary-value">{{ item.value }}</div>
+              <div class="summary-label">{{ item.label }}</div>
             </div>
           </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="stat-card-item">
-            <el-icon size="48" color="#67C23A"><DocumentChecked /></el-icon>
-            <div class="stat-info">
-              <div class="stat-value">{{ statistics?.totalTransactions || 0 }}</div>
-              <div class="stat-label">总交易数</div>
-            </div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="stat-card-item">
-            <el-icon size="48" color="#E6A23C"><Timer /></el-icon>
-            <div class="stat-info">
-              <div class="stat-value">{{ statistics?.pendingTransactions || 0 }}</div>
-              <div class="stat-label">待处理交易</div>
-            </div>
-          </div>
-        </el-col>
-        <el-col :span="6">
-          <div class="stat-card-item">
-            <el-icon size="48" color="#F56C6C"><Collection /></el-icon>
-            <div class="stat-info">
-              <div class="stat-value">{{ statistics?.productsTraced || 0 }}</div>
-              <div class="stat-label">溯源产品数</div>
-            </div>
-          </div>
-        </el-col>
-      </el-row>
-    </el-card>
-    
-    <!-- 详细数据表 -->
-    <el-row :gutter="20" class="detail-row">
-      <el-col :span="12">
-        <el-card>
-          <template #header>
-            <span>产品类别分布</span>
-          </template>
-          <el-table :data="categoryData" style="width: 100%">
-            <el-table-column prop="category" label="类别" />
-            <el-table-column prop="count" label="数量" />
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="20">
+      <el-col :span="8">
+        <el-card shadow="never">
+          <template #header>产品类别分布</template>
+          <el-empty v-if="categoryRows.length === 0" description="暂无产品数据" />
+          <el-table v-else :data="categoryRows" stripe>
+            <el-table-column prop="label" label="类别" />
+            <el-table-column prop="count" label="数量" width="100" />
             <el-table-column label="占比">
-              <template #default="scope">
-                <el-progress :percentage="scope.row.percentage" />
+              <template #default="{ row }">
+                <el-progress :percentage="row.percentage" />
               </template>
             </el-table-column>
           </el-table>
         </el-card>
       </el-col>
-      <el-col :span="12">
-        <el-card>
-          <template #header>
-            <span>操作类型分布</span>
-          </template>
-          <el-table :data="operationData" style="width: 100%">
-            <el-table-column prop="operation" label="操作类型" />
-            <el-table-column prop="count" label="数量" />
+
+      <el-col :span="8">
+        <el-card shadow="never">
+          <template #header>产品状态分布</template>
+          <el-empty v-if="statusRows.length === 0" description="暂无状态数据" />
+          <el-table v-else :data="statusRows" stripe>
+            <el-table-column prop="label" label="状态" />
+            <el-table-column prop="count" label="数量" width="100" />
             <el-table-column label="占比">
-              <template #default="scope">
-                <el-progress :percentage="scope.row.percentage" />
+              <template #default="{ row }">
+                <el-progress :percentage="row.percentage" />
               </template>
             </el-table-column>
           </el-table>
+        </el-card>
+      </el-col>
+
+      <el-col :span="8">
+        <el-card shadow="never">
+          <template #header>操作类型分布</template>
+          <el-empty v-if="operationRows.length === 0" description="暂无溯源记录" />
+          <el-table v-else :data="operationRows" stripe>
+            <el-table-column prop="label" label="操作类型" />
+            <el-table-column prop="count" label="数量" width="100" />
+            <el-table-column label="占比">
+              <template #default="{ row }">
+                <el-progress :percentage="row.percentage" />
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="20" class="summary-row">
+      <el-col :span="12">
+        <el-card shadow="never">
+          <template #header>用户类型统计</template>
+          <el-empty v-if="userRows.length === 0" description="暂无用户数据" />
+          <el-table v-else :data="userRows" stripe>
+            <el-table-column prop="label" label="用户类型" />
+            <el-table-column prop="count" label="数量" width="100" />
+            <el-table-column label="占比">
+              <template #default="{ row }">
+                <el-progress :percentage="row.percentage" />
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-col>
+
+      <el-col :span="12">
+        <el-card shadow="never">
+          <template #header>区块链运行状态</template>
+          <el-descriptions :column="1" border>
+            <el-descriptions-item label="链状态">
+              <el-tag :type="blockchainInfo?.chainValid ? 'success' : 'danger'">
+                {{ blockchainInfo?.chainValid ? '正常' : '异常' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="当前难度">
+              {{ blockchainInfo?.difficulty ?? 0 }}
+            </el-descriptions-item>
+            <el-descriptions-item label="待处理交易">
+              {{ blockchainInfo?.pendingTransactions ?? 0 }}
+            </el-descriptions-item>
+            <el-descriptions-item label="已追踪产品">
+              {{ blockchainInfo?.productsTraced ?? 0 }}
+            </el-descriptions-item>
+          </el-descriptions>
         </el-card>
       </el-col>
     </el-row>
@@ -112,47 +125,85 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
+
+function toRows(mapData, labelMap = {}) {
+  const entries = Object.entries(mapData || {})
+  const total = entries.reduce((sum, [, count]) => sum + Number(count || 0), 0)
+  return entries
+    .map(([key, count]) => ({
+      key,
+      label: labelMap[key] || key,
+      count: Number(count || 0),
+      percentage: total > 0 ? Math.round((Number(count || 0) / total) * 100) : 0
+    }))
+    .sort((a, b) => b.count - a.count)
+}
 
 export default {
   name: 'Statistics',
   setup() {
     const store = useStore()
-    const productChart = ref(null)
-    const traceChart = ref(null)
-    const userChart = ref(null)
-    
-    const statistics = computed(() => store.state.statistics)
-    
-    const categoryData = ref([
-      { category: '水果', count: 45, percentage: 30 },
-      { category: '蔬菜', count: 38, percentage: 25 },
-      { category: '粮食', count: 30, percentage: 20 },
-      { category: '茶叶', count: 23, percentage: 15 },
-      { category: '其他', count: 15, percentage: 10 }
+
+    const statistics = computed(() => store.state.statistics || {})
+    const blockchainInfo = computed(() => store.state.blockchainInfo || {})
+
+    const summaryCards = computed(() => [
+      { label: '产品总数', value: statistics.value.totalProducts || 0, icon: 'Goods', color: '#409EFF' },
+      { label: '溯源记录', value: statistics.value.totalTraceRecords || 0, icon: 'DocumentChecked', color: '#67C23A' },
+      { label: '用户总数', value: statistics.value.totalUsers || 0, icon: 'User', color: '#E6A23C' },
+      { label: '区块总数', value: statistics.value.totalBlocks || 0, icon: 'Collection', color: '#F56C6C' }
     ])
-    
-    const operationData = ref([
-      { operation: '生产', count: 150, percentage: 35 },
-      { operation: '加工', count: 100, percentage: 23 },
-      { operation: '运输', count: 80, percentage: 19 },
-      { operation: '仓储', count: 60, percentage: 14 },
-      { operation: '销售', count: 40, percentage: 9 }
+
+    const blockchainCards = computed(() => [
+      { label: '链上交易', value: blockchainInfo.value.totalTransactions || 0, icon: 'Promotion', color: '#409EFF' },
+      { label: '待处理交易', value: blockchainInfo.value.pendingTransactions || 0, icon: 'Timer', color: '#E6A23C' },
+      { label: '已追踪产品', value: blockchainInfo.value.productsTraced || 0, icon: 'Tickets', color: '#67C23A' },
+      { label: '链验证状态', value: blockchainInfo.value.chainValid ? '正常' : '异常', icon: 'CircleCheck', color: blockchainInfo.value.chainValid ? '#67C23A' : '#F56C6C' }
     ])
-    
-    onMounted(() => {
-      store.dispatch('fetchStatistics')
-      store.dispatch('fetchBlockchainInfo')
+
+    const categoryRows = computed(() => toRows(statistics.value.productsByCategory))
+    const statusRows = computed(() => toRows(statistics.value.productsByStatus, {
+      CREATED: '已创建',
+      PROCESS: '加工中',
+      TRANSPORT: '运输中',
+      STORAGE: '仓储中',
+      SALE: '销售中'
+    }))
+    const operationRows = computed(() => toRows(statistics.value.recordsByOperationType, {
+      PRODUCE: '生产',
+      PROCESS: '加工',
+      TRANSPORT: '运输',
+      STORAGE: '仓储',
+      SALE: '销售',
+      INSPECT: '检测',
+      PACKAGE: '包装'
+    }))
+    const userRows = computed(() => toRows(statistics.value.usersByType, {
+      PRODUCER: '生产者',
+      PROCESSOR: '加工者',
+      TRANSPORTER: '运输方',
+      RETAILER: '销售方',
+      ADMIN: '管理员'
+    }))
+
+    onMounted(async () => {
+      await Promise.all([
+        store.dispatch('fetchStatistics'),
+        store.dispatch('fetchBlockchainInfo')
+      ])
     })
-    
+
     return {
-      productChart,
-      traceChart,
-      userChart,
+      blockchainCards,
+      blockchainInfo,
+      categoryRows,
+      operationRows,
       statistics,
-      categoryData,
-      operationData
+      statusRows,
+      summaryCards,
+      userRows
     }
   }
 }
@@ -163,43 +214,34 @@ export default {
   padding: 20px;
 }
 
-.overview-row {
+.summary-row {
   margin-bottom: 20px;
 }
 
-.chart-container {
-  height: 250px;
+.summary-card {
+  min-height: 110px;
 }
 
-.blockchain-stats {
-  margin-bottom: 20px;
-}
-
-.stat-card-item {
+.summary-item {
   display: flex;
   align-items: center;
-  padding: 20px;
-  background: #f5f7fa;
-  border-radius: 8px;
+  gap: 16px;
 }
 
-.stat-card-item .el-icon {
-  margin-right: 15px;
+.summary-content {
+  display: flex;
+  flex-direction: column;
 }
 
-.stat-card-item .stat-value {
+.summary-value {
   font-size: 28px;
-  font-weight: bold;
+  font-weight: 700;
   color: #303133;
 }
 
-.stat-card-item .stat-label {
+.summary-label {
   font-size: 14px;
   color: #909399;
-  margin-top: 5px;
-}
-
-.detail-row {
-  margin-top: 20px;
+  margin-top: 6px;
 }
 </style>

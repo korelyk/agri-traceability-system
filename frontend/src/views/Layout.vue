@@ -1,12 +1,11 @@
 <template>
   <el-container class="layout-container">
-    <!-- 侧边栏 -->
     <el-aside width="220px" class="sidebar">
       <div class="logo">
         <el-icon size="32" color="#67C23A"><Connection /></el-icon>
         <span class="logo-text">农产品溯源</span>
       </div>
-      
+
       <el-menu
         :default-active="$route.path"
         router
@@ -23,9 +22,8 @@
         </el-menu-item>
       </el-menu>
     </el-aside>
-    
+
     <el-container>
-      <!-- 顶部导航 -->
       <el-header class="header">
         <div class="header-left">
           <breadcrumb />
@@ -34,12 +32,12 @@
           <el-dropdown @command="handleCommand">
             <span class="user-info">
               <el-avatar :size="32" :icon="UserFilled" />
-              <span class="username">{{ user?.realName || '用户' }}</span>
+              <span class="username">{{ displayName }}</span>
               <el-icon><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                <el-dropdown-item command="profile">个人信息</el-dropdown-item>
                 <el-dropdown-item command="settings">系统设置</el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
@@ -47,29 +45,64 @@
           </el-dropdown>
         </div>
       </el-header>
-      
-      <!-- 主内容区 -->
+
       <el-main class="main-content">
         <router-view />
       </el-main>
     </el-container>
   </el-container>
+
+  <el-dialog v-model="profileVisible" title="个人信息" width="420px">
+    <el-descriptions :column="1" border>
+      <el-descriptions-item label="用户名">{{ user?.username || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="姓名">{{ user?.realName || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="角色">{{ user?.userTypeName || user?.userType || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="企业">{{ user?.companyName || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="邮箱">{{ user?.email || '-' }}</el-descriptions-item>
+      <el-descriptions-item label="电话">{{ user?.phone || '-' }}</el-descriptions-item>
+    </el-descriptions>
+  </el-dialog>
+
+  <el-dialog v-model="settingsVisible" title="系统设置" width="460px">
+    <el-alert
+      type="info"
+      :closable="false"
+      title="当前为毕业设计演示版，以下内容用于展示当前运行配置。"
+      class="settings-alert"
+    />
+    <el-descriptions :column="1" border>
+      <el-descriptions-item label="前端模式">Web 演示版</el-descriptions-item>
+      <el-descriptions-item label="接口地址">同源 /api 代理</el-descriptions-item>
+      <el-descriptions-item label="认证方式">JWT Bearer Token</el-descriptions-item>
+      <el-descriptions-item label="区块链状态">本地持久化</el-descriptions-item>
+      <el-descriptions-item label="部署域名">bishe.yyy999.my</el-descriptions-item>
+    </el-descriptions>
+  </el-dialog>
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useStore } from 'vuex'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 
 export default {
   name: 'Layout',
   setup() {
     const store = useStore()
-    const route = useRoute()
     const router = useRouter()
-    
+
+    const profileVisible = ref(false)
+    const settingsVisible = ref(false)
     const user = computed(() => store.state.user)
-    
+    const displayName = computed(() => {
+      const currentUser = user.value
+      if (!currentUser) {
+        return '用户'
+      }
+      return currentUser.realName || currentUser.username || currentUser.companyName || '用户'
+    })
+
     const menuItems = [
       { path: '/dashboard', title: '系统概览', icon: 'Odometer' },
       { path: '/products', title: '产品管理', icon: 'Goods' },
@@ -78,7 +111,7 @@ export default {
       { path: '/users', title: '用户管理', icon: 'User' },
       { path: '/statistics', title: '统计分析', icon: 'TrendCharts' }
     ]
-    
+
     const handleCommand = (command) => {
       switch (command) {
         case 'logout':
@@ -86,16 +119,23 @@ export default {
           router.push('/login')
           break
         case 'profile':
+          profileVisible.value = true
           break
         case 'settings':
+          settingsVisible.value = true
           break
+        default:
+          ElMessage.info('功能暂未开放')
       }
     }
-    
+
     return {
-      user,
+      displayName,
+      handleCommand,
       menuItems,
-      handleCommand
+      profileVisible,
+      settingsVisible,
+      user
     }
   }
 }
@@ -172,5 +212,9 @@ export default {
   margin-top: 60px;
   background-color: #f0f2f5;
   min-height: calc(100vh - 60px);
+}
+
+.settings-alert {
+  margin-bottom: 16px;
 }
 </style>
