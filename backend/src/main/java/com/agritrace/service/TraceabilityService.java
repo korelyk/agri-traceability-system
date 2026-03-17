@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -177,13 +178,18 @@ public class TraceabilityService {
             return false;
         }
 
-        for (int i = 0; i < dbRecords.size(); i++) {
-            TraceRecord record = dbRecords.get(i);
-            Transaction transaction = blockchainRecords.get(i);
+        Set<String> dbTransactionIds = dbRecords.stream()
+                .map(TraceRecord::getTransactionId)
+                .collect(Collectors.toSet());
+        Set<String> blockchainTransactionIds = blockchainRecords.stream()
+                .map(Transaction::getTransactionId)
+                .collect(Collectors.toSet());
 
-            if (!record.getTransactionId().equals(transaction.getTransactionId())) {
-                return false;
-            }
+        if (!dbTransactionIds.equals(blockchainTransactionIds)) {
+            return false;
+        }
+
+        for (Transaction transaction : blockchainRecords) {
             if (!digitalSignature.verifyTransaction(transaction)) {
                 return false;
             }
