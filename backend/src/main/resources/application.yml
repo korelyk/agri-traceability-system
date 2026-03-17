@@ -33,6 +33,7 @@ blockchain:
   difficulty: 4
   mining-reward: 100
   block-size: 10
+  state-file: ${BLOCKCHAIN_STATE_FILE:${user.home}/.agritrace/blockchain-state.json}
 
 app:
   name: Agri Traceability System
@@ -41,3 +42,4 @@ app:
   security:
     jwt-secret: ${JWT_SECRET:change-this-jwt-secret-before-production}
     token-expire-hours: ${JWT_EXPIRE_HOURS:24}
+    key-secret: ${APP_KEY_SECRET:change-this-key-secret-before-production}

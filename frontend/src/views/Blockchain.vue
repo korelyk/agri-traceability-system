@@ -5,45 +5,49 @@
         <div class="card-header">
           <span>区块链浏览器</span>
           <el-tag :type="blockchainInfo?.chainValid ? 'success' : 'danger'">
-            {{ blockchainInfo?.chainValid ? '链有效' : '链无效' }}
+            {{ blockchainInfo?.chainValid ? '链状态正常' : '链状态异常' }}
           </el-tag>
         </div>
       </template>
-      
+
       <el-descriptions :column="3" border class="chain-info">
-        <el-descriptions-item label="总区块数">
+        <el-descriptions-item label="区块总数">
           {{ blockchainInfo?.totalBlocks || 0 }}
         </el-descriptions-item>
-        <el-descriptions-item label="总交易数">
+        <el-descriptions-item label="交易总数">
           {{ blockchainInfo?.totalTransactions || 0 }}
         </el-descriptions-item>
-        <el-descriptions-item label="待处理交易">
+        <el-descriptions-item label="待打包交易">
           {{ blockchainInfo?.pendingTransactions || 0 }}
         </el-descriptions-item>
         <el-descriptions-item label="挖矿难度">
-          {{ blockchainInfo?.difficulty || 4 }}
+          {{ blockchainInfo?.difficulty || 0 }}
         </el-descriptions-item>
-        <el-descriptions-item label="溯源产品数">
+        <el-descriptions-item label="已追溯产品">
           {{ blockchainInfo?.productsTraced || 0 }}
         </el-descriptions-item>
-        <el-descriptions-item label="链状态">
-          {{ blockchainInfo?.chainValid ? '有效' : '无效' }}
+        <el-descriptions-item label="数据校验">
+          {{ blockchainInfo?.chainValid ? '通过' : '失败' }}
         </el-descriptions-item>
       </el-descriptions>
     </el-card>
-    
-    <!-- 区块列表 -->
+
     <el-card class="blocks-card">
       <template #header>
-        <span>区块列表</span>
+        <div class="card-header">
+          <span>区块列表</span>
+          <el-button text type="primary" @click="fetchData">刷新</el-button>
+        </div>
       </template>
-      
-      <el-collapse v-model="activeBlocks">
+
+      <el-empty v-if="!loading && blocks.length === 0" description="暂无区块数据" />
+
+      <el-collapse v-else v-model="activeBlocks">
         <el-collapse-item
           v-for="block in blocks"
           :key="block.index"
-          :title="`区块 #${block.index} - ${block.blockHash?.substring(0, 20)}...`"
           :name="block.index"
+          :title="`区块 #${block.index} · ${shortHash(block.blockHash)}`"
         >
           <el-descriptions :column="1" border size="small">
             <el-descriptions-item label="区块哈希">
@@ -52,40 +56,41 @@
             <el-descriptions-item label="前一区块哈希">
               <code>{{ block.previousHash }}</code>
             </el-descriptions-item>
-            <el-descriptions-item label="Merkle根">
+            <el-descriptions-item label="Merkle 根">
               <code>{{ block.merkleRoot }}</code>
             </el-descriptions-item>
-            <el-descriptions-item label="时间戳">
+            <el-descriptions-item label="时间">
               {{ formatTime(block.timestamp) }}
             </el-descriptions-item>
-            <el-descriptions-item label="随机数">
+            <el-descriptions-item label="Nonce">
               {{ block.nonce }}
             </el-descriptions-item>
             <el-descriptions-item label="难度">
               {{ block.difficulty }}
             </el-descriptions-item>
+            <el-descriptions-item label="关联产品">
+              {{ block.productId || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="操作类型">
+              {{ block.operationType || '-' }}
+            </el-descriptions-item>
             <el-descriptions-item label="交易数量">
               {{ block.transactions?.length || 0 }}
             </el-descriptions-item>
-            <el-descriptions-item label="产品ID">
-              {{ block.productId }}
-            </el-descriptions-item>
-            <el-descriptions-item label="操作类型">
-              {{ block.operationType }}
-            </el-descriptions-item>
           </el-descriptions>
-          
-          <div v-if="block.transactions && block.transactions.length > 0" class="transactions">
-            <h4>交易列表</h4>
+
+          <div v-if="block.transactions?.length" class="transactions">
+            <h4>交易明细</h4>
             <el-table :data="block.transactions" size="small">
-              <el-table-column prop="transactionId" label="交易ID" width="180">
-                <template #default="scope">
-                  <code>{{ scope.row.transactionId?.substring(0, 16) }}...</code>
+              <el-table-column prop="transactionId" label="交易ID" min-width="180">
+                <template #default="{ row }">
+                  <code>{{ shortHash(row.transactionId) }}</code>
                 </template>
               </el-table-column>
-              <el-table-column prop="productId" label="产品ID" />
-              <el-table-column prop="operationType" label="操作类型" />
-              <el-table-column prop="operatorName" label="操作者" />
+              <el-table-column prop="productId" label="产品ID" min-width="160" />
+              <el-table-column prop="operationType" label="操作类型" width="120" />
+              <el-table-column prop="operatorName" label="操作人" width="140" />
+              <el-table-column prop="location" label="地点" min-width="140" />
             </el-table>
           </div>
         </el-collapse-item>
@@ -97,83 +102,59 @@
 <script>
 import { ref, computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
+import { ElMessage } from 'element-plus'
 
 export default {
   name: 'Blockchain',
   setup() {
     const store = useStore()
-    const activeBlocks = ref([0])
-    
+    const loading = ref(false)
+    const blocks = ref([])
+    const activeBlocks = ref([])
+
     const blockchainInfo = computed(() => store.state.blockchainInfo)
-    
-    // 模拟区块数据
-    const blocks = ref([
-      {
-        index: 0,
-        blockHash: '0000a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef12',
-        previousHash: '0',
-        merkleRoot: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-        timestamp: Date.now() / 1000 - 86400 * 7,
-        nonce: 12345,
-        difficulty: 4,
-        transactions: [],
-        productId: 'GENESIS',
-        operationType: '创世区块'
-      },
-      {
-        index: 1,
-        blockHash: '0000b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234',
-        previousHash: '0000a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef12',
-        merkleRoot: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
-        timestamp: Date.now() / 1000 - 86400 * 5,
-        nonce: 23456,
-        difficulty: 4,
-        transactions: [
-          {
-            transactionId: 'tx001',
-            productId: 'AP202401010001',
-            operationType: 'PRODUCE',
-            operatorName: '张三'
-          }
-        ],
-        productId: 'AP202401010001',
-        operationType: '生产'
-      },
-      {
-        index: 2,
-        blockHash: '0000c3d4e5f6789012345678901234567890abcdef1234567890abcdef12345',
-        previousHash: '0000b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef1234',
-        merkleRoot: 'b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef12345678',
-        timestamp: Date.now() / 1000 - 86400 * 3,
-        nonce: 34567,
-        difficulty: 4,
-        transactions: [
-          {
-            transactionId: 'tx002',
-            productId: 'GR202401010002',
-            operationType: 'PRODUCE',
-            operatorName: '李四'
-          }
-        ],
-        productId: 'GR202401010002',
-        operationType: '生产'
+
+    const fetchData = async () => {
+      loading.value = true
+      const [infoResult, blocksResult] = await Promise.all([
+        store.dispatch('fetchBlockchainInfo'),
+        store.dispatch('fetchBlocks')
+      ])
+      loading.value = false
+
+      if (infoResult.success === false) {
+        ElMessage.error(infoResult.message || '获取区块链统计失败')
       }
-    ])
-    
+
+      if (blocksResult.success) {
+        blocks.value = blocksResult.data || []
+        activeBlocks.value = blocks.value.length ? [blocks.value[0].index] : []
+      } else {
+        blocks.value = []
+        ElMessage.error(blocksResult.message || '获取区块列表失败')
+      }
+    }
+
     const formatTime = (timestamp) => {
-      if (!timestamp) return ''
+      if (!timestamp) return '-'
       return new Date(timestamp * 1000).toLocaleString('zh-CN')
     }
-    
-    onMounted(() => {
-      store.dispatch('fetchBlockchainInfo')
-    })
-    
+
+    const shortHash = (value) => {
+      if (!value) return '-'
+      return value.length > 24 ? `${value.slice(0, 12)}...${value.slice(-8)}` : value
+    }
+
+    onMounted(fetchData)
+
     return {
-      blockchainInfo,
+      loading,
       blocks,
       activeBlocks,
-      formatTime
+      blockchainInfo,
+      fetchData,
+      formatTime,
+      shortHash
     }
   }
 }
@@ -182,6 +163,12 @@ export default {
 <style scoped>
 .blockchain-page {
   padding: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .chain-info {
@@ -194,9 +181,13 @@ export default {
 
 .transactions {
   margin-top: 20px;
-  padding: 15px;
-  background: #f5f7fa;
-  border-radius: 4px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.transactions h4 {
+  margin: 0 0 12px;
 }
 
 code {

@@ -2,7 +2,11 @@ package com.agritrace.service;
 
 import com.agritrace.blockchain.Blockchain;
 import com.agritrace.crypto.DigitalSignature;
-import com.agritrace.entity.*;
+import com.agritrace.entity.Block;
+import com.agritrace.entity.Product;
+import com.agritrace.entity.TraceRecord;
+import com.agritrace.entity.Transaction;
+import com.agritrace.entity.User;
 import com.agritrace.mapper.ProductMapper;
 import com.agritrace.mapper.TraceRecordMapper;
 import com.agritrace.mapper.UserMapper;
@@ -21,12 +25,15 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Random;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
-/**
- * 溯源服务类
- * 核心业务逻辑：产品注册、溯源记录添加、二维码生成、数据验证
- */
 @Service
 public class TraceabilityService {
 
@@ -45,161 +52,126 @@ public class TraceabilityService {
     @Autowired
     private UserMapper userMapper;
 
-    /**
-     * 注册新产品
-     */
+    @Autowired
+    private KeySecurityService keySecurityService;
+
     @Transactional
     public Product registerProduct(String productName, String productCategory,
             String producerId, String origin, String description) {
-        // 生成产品ID
-        String productId = generateProductId(productCategory);
-
-        // 获取生产者信息
         User producer = Optional.ofNullable(userMapper.selectById(producerId))
                 .orElseThrow(() -> new RuntimeException("生产者不存在"));
 
-        // 创建产品
+        String productId = generateProductId(productCategory);
         Product product = Product.create(
-                productId, productName, productCategory,
-                producerId, producer.getRealName(), origin);
+                productId,
+                productName,
+                productCategory,
+                producerId,
+                producer.getRealName(),
+                origin);
         product.setDescription(description);
         product.setBatchNumber(generateBatchNumber());
 
-        // 创建生产溯源记录
         TraceRecord record = TraceRecord.create(
-                productId, "PRODUCE", producerId,
-                producer.getRealName(), "PRODUCER", origin,
+                productId,
+                "PRODUCE",
+                producerId,
+                producer.getRealName(),
+                "PRODUCER",
+                origin,
                 "产品生产注册: " + productName);
 
-        // 创建区块链交易
         Transaction transaction = createTransaction(product, record, producer);
-
-        // 数字签名
-        String signature = digitalSignature.signTransaction(transaction, producer.getPrivateKey());
+        String signature = digitalSignature.signTransaction(
+                transaction,
+                keySecurityService.decrypt(producer.getPrivateKey()));
         transaction.setDigitalSignature(signature);
-
         record.setSignature(signature, producer.getPublicKey());
 
-        // 添加到区块链
         blockchain.addTransaction(transaction);
         Block newBlock = blockchain.minePendingTransactions(producerId);
-
-        // 更新区块链关联信息
         if (newBlock != null) {
             product.setBlockHash(newBlock.getBlockHash());
             product.setTransactionId(transaction.getTransactionId());
             record.setBlockchainInfo(newBlock.getBlockHash(), transaction.getTransactionId());
         }
 
-        // 生成二维码
-        String qrCode = generateQRCode(productId);
-        product.setQrCode(qrCode);
-
-        // 保存到数据库
+        product.setQrCode(generateQRCode(productId));
         productMapper.insert(product);
         traceRecordMapper.insert(record);
-
         return product;
     }
 
-    /**
-     * 添加溯源记录
-     */
     @Transactional
     public TraceRecord addTraceRecord(String productId, String operationType,
             String operatorId, String location,
             String operationDetail, String environmentData) {
-        // 验证产品存在
         Product product = Optional.ofNullable(productMapper.selectById(productId))
                 .orElseThrow(() -> new RuntimeException("产品不存在"));
-
-        // 获取操作者信息
         User operator = Optional.ofNullable(userMapper.selectById(operatorId))
                 .orElseThrow(() -> new RuntimeException("操作者不存在"));
 
-        // 创建溯源记录
         TraceRecord record = TraceRecord.create(
-                productId, operationType, operatorId,
-                operator.getRealName(), operator.getUserType(),
-                location, operationDetail);
+                productId,
+                operationType,
+                operatorId,
+                operator.getRealName(),
+                operator.getUserType(),
+                location,
+                operationDetail);
 
-        // 解析环境数据
-        if (environmentData != null && !environmentData.isEmpty()) {
+        if (environmentData != null && !environmentData.isBlank()) {
             parseEnvironmentData(record, environmentData);
         }
 
-        // 创建区块链交易
         Transaction transaction = createTransaction(product, record, operator);
-
-        // 数字签名
-        String signature = digitalSignature.signTransaction(transaction, operator.getPrivateKey());
+        String signature = digitalSignature.signTransaction(
+                transaction,
+                keySecurityService.decrypt(operator.getPrivateKey()));
         transaction.setDigitalSignature(signature);
         record.setSignature(signature, operator.getPublicKey());
 
-        // 添加到区块链
         blockchain.addTransaction(transaction);
         Block newBlock = blockchain.minePendingTransactions(operatorId);
-
-        // 更新区块链关联信息
         if (newBlock != null) {
             record.setBlockchainInfo(newBlock.getBlockHash(), transaction.getTransactionId());
         }
 
-        // 更新产品状态
         product.updateStatus(operationType, operatorId, location);
-
-        // 保存
         traceRecordMapper.insert(record);
         productMapper.updateById(product);
-
         return record;
     }
 
-    /**
-     * 查询产品完整溯源信息
-     */
     public Map<String, Object> traceProduct(String productId) {
-        Map<String, Object> result = new HashMap<>();
-
-        // 获取产品信息
         Product product = Optional.ofNullable(productMapper.selectById(productId))
                 .orElseThrow(() -> new RuntimeException("产品不存在"));
 
-        // 获取数据库中的溯源记录
         List<TraceRecord> dbRecords = traceRecordMapper.selectList(
                 new LambdaQueryWrapper<TraceRecord>()
                         .eq(TraceRecord::getProductId, productId)
                         .orderByAsc(TraceRecord::getOperationTime));
 
-        // 获取区块链中的溯源记录
         List<Transaction> blockchainRecords = blockchain.getProductTraceHistory(productId);
 
-        // 验证数据一致性
-        boolean isConsistent = verifyDataConsistency(dbRecords, blockchainRecords);
-
-        // 构建结果
+        Map<String, Object> result = new HashMap<>();
         result.put("product", product);
         result.put("traceHistory", dbRecords);
         result.put("blockchainRecords", blockchainRecords);
-        result.put("dataConsistent", isConsistent);
+        result.put("dataConsistent", verifyDataConsistency(dbRecords, blockchainRecords));
         result.put("blockchainValid", blockchain.isChainValid());
 
-        // 统计信息
         Map<String, Object> statistics = new HashMap<>();
         statistics.put("totalRecords", dbRecords.size());
         statistics.put("verifiedRecords", dbRecords.stream().filter(TraceRecord::isVerified).count());
         statistics.put("operationTypes", dbRecords.stream()
                 .map(TraceRecord::getOperationType)
                 .distinct()
-                .toList());
+                .collect(Collectors.toList()));
         result.put("statistics", statistics);
-
         return result;
     }
 
-    /**
-     * 验证数据一致性
-     */
     private boolean verifyDataConsistency(List<TraceRecord> dbRecords, List<Transaction> blockchainRecords) {
         if (dbRecords.size() != blockchainRecords.size()) {
             return false;
@@ -207,65 +179,54 @@ public class TraceabilityService {
 
         for (int i = 0; i < dbRecords.size(); i++) {
             TraceRecord record = dbRecords.get(i);
-            Transaction tx = blockchainRecords.get(i);
+            Transaction transaction = blockchainRecords.get(i);
 
-            // 验证交易ID匹配
-            if (!record.getTransactionId().equals(tx.getTransactionId())) {
+            if (!record.getTransactionId().equals(transaction.getTransactionId())) {
                 return false;
             }
-
-            // 验证数字签名
-            if (!digitalSignature.verifyTransaction(tx)) {
+            if (!digitalSignature.verifyTransaction(transaction)) {
                 return false;
             }
         }
-
         return true;
     }
 
-    /**
-     * 创建区块链交易
-     */
     private Transaction createTransaction(Product product, TraceRecord record, User operator) {
         Transaction transaction = new Transaction();
         transaction.setFromAddress(operator.getBlockchainAddress());
+        transaction.setFromPublicKey(operator.getPublicKey());
         transaction.setProductId(product.getProductId());
         transaction.setProductName(product.getProductName());
+        transaction.setProductCategory(product.getProductCategory());
+        transaction.setBatchNumber(product.getBatchNumber());
         transaction.setOperationType(record.getOperationType());
         transaction.setOperationDetail(record.getOperationDetail());
         transaction.setOperatorId(operator.getUserId());
         transaction.setOperatorName(operator.getRealName());
         transaction.setLocation(record.getLocation());
-        transaction.setFromPublicKey(operator.getPublicKey());
+        transaction.setEnvironmentData(record.getEnvironmentData());
+        transaction.setTemperature(record.getTemperature());
+        transaction.setHumidity(record.getHumidity());
         transaction.setTransactionHash(transaction.calculateHash());
-
         return transaction;
     }
 
-    /**
-     * 生成产品ID
-     */
     private String generateProductId(String category) {
-        String prefix = category != null ? category.substring(0, Math.min(2, category.length())).toUpperCase() : "PR";
+        String prefix = category == null || category.isBlank()
+                ? "PR"
+                : category.substring(0, Math.min(2, category.length())).toUpperCase();
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
         String random = String.format("%04d", new Random().nextInt(10000));
         return prefix + timestamp + random;
     }
 
-    /**
-     * 生成批次号
-     */
     private String generateBatchNumber() {
-        return "B" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) +
-                String.format("%06d", new Random().nextInt(1000000));
+        return "B" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                + String.format("%06d", new Random().nextInt(1_000_000));
     }
 
-    /**
-     * 生成二维码
-     */
     private String generateQRCode(String productId) {
-        // 生成溯源URL
-        String traceUrl = "https://agritrace.com/trace/" + productId;
+        String traceUrl = "https://bishe.yyy999.my/#/public-trace?productId=" + productId;
 
         try {
             QRCodeWriter qrCodeWriter = new QRCodeWriter();
@@ -273,120 +234,84 @@ public class TraceabilityService {
             hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
             hints.put(EncodeHintType.MARGIN, 2);
 
-            BitMatrix bitMatrix = qrCodeWriter.encode(
-                    traceUrl, BarcodeFormat.QR_CODE, 300, 300, hints);
-
+            BitMatrix bitMatrix = qrCodeWriter.encode(traceUrl, BarcodeFormat.QR_CODE, 300, 300, hints);
             BufferedImage image = MatrixToImageWriter.toBufferedImage(bitMatrix);
 
-            // 转换为Base64
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             ImageIO.write(image, "PNG", outputStream);
-            byte[] imageBytes = outputStream.toByteArray();
-
-            return "data:image/png;base64," + Base64.getEncoder().encodeToString(imageBytes);
-        } catch (Exception e) {
-            throw new RuntimeException("生成二维码失败", e);
+            return "data:image/png;base64," + Base64.getEncoder().encodeToString(outputStream.toByteArray());
+        } catch (Exception ex) {
+            throw new RuntimeException("生成二维码失败", ex);
         }
     }
 
-    /**
-     * 解析环境数据
-     */
     private void parseEnvironmentData(TraceRecord record, String environmentData) {
         try {
-            // 简单解析JSON格式环境数据
             if (environmentData.contains("temperature")) {
-                String tempStr = environmentData.replaceAll(".*\"temperature\":\\s*([0-9.]+).*", "$1");
-                record.setTemperature(Double.parseDouble(tempStr));
+                String temp = environmentData.replaceAll(".*\"temperature\":\\s*([0-9.]+).*", "$1");
+                record.setTemperature(Double.parseDouble(temp));
             }
             if (environmentData.contains("humidity")) {
-                String humStr = environmentData.replaceAll(".*\"humidity\":\\s*([0-9.]+).*", "$1");
-                record.setHumidity(Double.parseDouble(humStr));
+                String humidity = environmentData.replaceAll(".*\"humidity\":\\s*([0-9.]+).*", "$1");
+                record.setHumidity(Double.parseDouble(humidity));
             }
-            record.setEnvironmentData(environmentData);
-        } catch (Exception e) {
-            // 解析失败不影响主流程
-            record.setEnvironmentData(environmentData);
+        } catch (Exception ignored) {
+            // Keep the raw payload even if parsing fails.
         }
+        record.setEnvironmentData(environmentData);
     }
 
-    /**
-     * 获取区块链统计信息
-     */
     public Map<String, Object> getBlockchainStatistics() {
         return blockchain.getStatistics();
     }
 
-    /**
-     * 获取系统统计信息
-     */
     public Map<String, Object> getSystemStatistics() {
         Map<String, Object> stats = new HashMap<>();
-
-        // 产品统计
         stats.put("totalProducts", productMapper.selectCount(null));
-
-        List<Map<String, Object>> catCounts = productMapper.countByCategory();
-        Map<String, Long> categoryMap = new HashMap<>();
-        for (Map<String, Object> map : catCounts) {
-            categoryMap.put((String) map.get("category"), ((Number) map.get("count")).longValue());
-        }
-        stats.put("productsByCategory", categoryMap);
-
-        // 状态统计
-        List<Map<String, Object>> statCounts = productMapper.countByStatus();
-        Map<String, Long> statusMap = new HashMap<>();
-        for (Map<String, Object> map : statCounts) {
-            statusMap.put((String) map.get("status"), ((Number) map.get("count")).longValue());
-        }
-        stats.put("productsByStatus", statusMap);
-
-        // 溯源记录统计
+        stats.put("productsByCategory", toLongMap(productMapper.countByCategory(), "category"));
+        stats.put("productsByStatus", toLongMap(productMapper.countByStatus(), "status"));
         stats.put("totalTraceRecords", traceRecordMapper.selectCount(null));
-
-        List<Map<String, Object>> opCounts = traceRecordMapper.countByOperationType();
-        Map<String, Long> opMap = new HashMap<>();
-        for (Map<String, Object> map : opCounts) {
-            opMap.put((String) map.get("operationType"), ((Number) map.get("count")).longValue());
-        }
-        stats.put("recordsByOperationType", opMap);
-
-        // 用户统计
+        stats.put("recordsByOperationType", toLongMap(traceRecordMapper.countByOperationType(), "operationType"));
         stats.put("totalUsers", userMapper.selectCount(null));
         stats.put("usersByType", userMapper.selectList(null).stream()
-                .collect(java.util.stream.Collectors.groupingBy(
-                        User::getUserType, java.util.stream.Collectors.counting())));
-
-        // 区块链统计
+                .collect(Collectors.groupingBy(User::getUserType, Collectors.counting())));
         stats.putAll(blockchain.getStatistics());
-
         return stats;
     }
 
-    /**
-     * 验证区块
-     */
-    public boolean verifyBlock(String blockHash) {
-        Block block = blockchain.getBlockByHash(blockHash);
-        if (block == null) {
-            return false;
+    private Map<String, Long> toLongMap(List<Map<String, Object>> source, String keyName) {
+        Map<String, Long> result = new HashMap<>();
+        for (Map<String, Object> row : source) {
+            Object key = row.get(keyName);
+            Object count = row.get("count");
+            if (key != null && count instanceof Number) {
+                result.put(String.valueOf(key), ((Number) count).longValue());
+            }
         }
-        return block.isValid();
+        return result;
     }
 
-    /**
-     * 验证交易
-     */
+    public boolean verifyBlock(String blockHash) {
+        Block block = blockchain.getBlockByHash(blockHash);
+        return block != null && block.isValid();
+    }
+
     public boolean verifyTransaction(String transactionId) {
-        Transaction tx = blockchain.findTransaction(transactionId);
-        if (tx == null) {
-            return false;
-        }
-        return digitalSignature.verifyTransaction(tx);
+        Transaction transaction = blockchain.findTransaction(transactionId);
+        return transaction != null && digitalSignature.verifyTransaction(transaction);
     }
 
     public List<Product> getAllProducts() {
         return productMapper.selectList(new LambdaQueryWrapper<Product>()
                 .orderByDesc(Product::getCreatedAt));
+    }
+
+    public Product getProductById(String productId) {
+        return Optional.ofNullable(productMapper.selectById(productId))
+                .orElseThrow(() -> new RuntimeException("产品不存在"));
+    }
+
+    public List<Block> getAllBlocks() {
+        return blockchain.getBlocks();
     }
 }

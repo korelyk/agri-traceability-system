@@ -30,8 +30,6 @@ CREATE TABLE IF NOT EXISTS products (
     product_name VARCHAR(128) NOT NULL,
     product_category VARCHAR(64),
     batch_number VARCHAR(64),
-    public_key TEXT,
-    private_key TEXT,
     origin VARCHAR(128),
     producer_id VARCHAR(64),
     producer_name VARCHAR(128),
@@ -40,7 +38,7 @@ CREATE TABLE IF NOT EXISTS products (
     quality_grade VARCHAR(32),
     certification VARCHAR(64),
     description TEXT,
-    qr_code TEXT COMMENT '二维码数据',
+    qr_code TEXT,
     current_status VARCHAR(64),
     current_holder VARCHAR(64),
     current_location VARCHAR(128),
@@ -75,3 +73,7 @@ CREATE TABLE IF NOT EXISTS trace_records (
     created_at DATETIME,
     verified BOOLEAN DEFAULT FALSE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE INDEX idx_products_producer_id ON products(producer_id);
+CREATE INDEX idx_trace_records_product_id ON trace_records(product_id);
+CREATE INDEX idx_trace_records_operation_time ON trace_records(operation_time);

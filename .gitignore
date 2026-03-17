@@ -24,6 +24,8 @@ target/
 # Logs
 logs/
 *.log
+.env
+.env.local
 
 # OS
 .DS_Store

@@ -30,6 +30,9 @@ public class UserService {
     @Autowired
     private JwtUtil jwtUtil;
 
+    @Autowired
+    private KeySecurityService keySecurityService;
+
     public User registerUser(String username, String password, String realName,
             String userType, String companyName, String email, String phone) {
         if (userMapper.exists(new LambdaQueryWrapper<User>().eq(User::getUsername, username))) {
@@ -43,7 +46,7 @@ public class UserService {
         user.setPhone(phone);
 
         Map<String, String> keys = DigitalSignature.KeyPairGenerator.generateKeyPair();
-        user.setKeyPair(keys.get("publicKey"), keys.get("privateKey"));
+        user.setKeyPair(keys.get("publicKey"), keySecurityService.encrypt(keys.get("privateKey")));
         user.setBlockchainAddress(digitalSignature.generateAddress(keys.get("publicKey")));
 
         userMapper.insert(user);
@@ -64,6 +67,7 @@ public class UserService {
         }
 
         upgradePasswordIfNeeded(user, password);
+        upgradePrivateKeyIfNeeded(user);
 
         user.updateLastLogin();
         userMapper.updateById(user);
@@ -169,6 +173,13 @@ public class UserService {
     private void upgradePasswordIfNeeded(User user, String rawPassword) {
         if (!isEncodedPassword(user.getPassword())) {
             user.setPassword(passwordEncoder.encode(rawPassword));
+        }
+    }
+
+    private void upgradePrivateKeyIfNeeded(User user) {
+        if (user.getPrivateKey() != null && !user.getPrivateKey().isBlank()
+                && !keySecurityService.isEncrypted(user.getPrivateKey())) {
+            user.setPrivateKey(keySecurityService.encrypt(user.getPrivateKey()));
         }
     }
 

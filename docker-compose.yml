@@ -28,12 +28,16 @@ services:
       DB_USERNAME: root
       DB_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
+      APP_KEY_SECRET: ${APP_KEY_SECRET}
+      BLOCKCHAIN_STATE_FILE: /data/blockchain-state.json
       TZ: Asia/Shanghai
     depends_on:
       mysql:
         condition: service_healthy
     ports:
       - "8080:8080"
+    volumes:
+      - chain-data:/data
 
   frontend:
     build:
@@ -49,3 +53,4 @@ services:
 
 volumes:
   mysql-data:
+  chain-data:

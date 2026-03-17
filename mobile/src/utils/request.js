@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = uni.getStorageSync('apiBaseUrl') || 'http://localhost:8080';
+const API_BASE_URL = uni.getStorageSync('apiBaseUrl') || 'https://bishe.yyy999.my';
 
 const service = axios.create({
     baseURL: API_BASE_URL,

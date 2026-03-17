@@ -2,6 +2,7 @@ package com.agritrace.controller;
 
 import com.agritrace.entity.Product;
 import com.agritrace.entity.TraceRecord;
+import com.agritrace.entity.User;
 import com.agritrace.service.TraceabilityService;
 import com.agritrace.service.UserService;
 import com.google.gson.Gson;
@@ -48,8 +49,8 @@ public class TraceabilityController {
                     getString(request, "description"));
 
             return ResponseEntity.ok(success("产品注册成功", product));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(error("产品注册失败: " + e.getMessage()));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("产品注册失败: " + ex.getMessage()));
         }
     }
 
@@ -57,6 +58,15 @@ public class TraceabilityController {
     public ResponseEntity<?> getAllProducts() {
         List<Product> products = traceabilityService.getAllProducts();
         return ResponseEntity.ok(success(products));
+    }
+
+    @GetMapping("/products/{productId}")
+    public ResponseEntity<?> getProduct(@PathVariable String productId) {
+        try {
+            return ResponseEntity.ok(success(traceabilityService.getProductById(productId)));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("获取产品详情失败: " + ex.getMessage()));
+        }
     }
 
     @PostMapping("/trace/add")
@@ -75,8 +85,8 @@ public class TraceabilityController {
                     buildEnvironmentData(request));
 
             return ResponseEntity.ok(success("溯源记录添加成功", record));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(error("添加溯源记录失败: " + e.getMessage()));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("添加溯源记录失败: " + ex.getMessage()));
         }
     }
 
@@ -84,8 +94,8 @@ public class TraceabilityController {
     public ResponseEntity<?> traceProduct(@PathVariable String productId) {
         try {
             return ResponseEntity.ok(success(traceabilityService.traceProduct(productId)));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(error("查询溯源信息失败: " + e.getMessage()));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("查询溯源信息失败: " + ex.getMessage()));
         }
     }
 
@@ -97,7 +107,7 @@ public class TraceabilityController {
     @PostMapping("/users/register")
     public ResponseEntity<?> registerUser(@RequestBody Map<String, Object> request) {
         try {
-            var user = userService.registerUser(
+            User user = userService.registerUser(
                     getString(request, "username"),
                     getString(request, "password"),
                     getString(request, "realName"),
@@ -107,8 +117,8 @@ public class TraceabilityController {
                     getString(request, "phone"));
 
             return ResponseEntity.ok(success("用户注册成功", userService.toUserView(user)));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(error("用户注册失败: " + e.getMessage()));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("用户注册失败: " + ex.getMessage()));
         }
     }
 
@@ -120,8 +130,8 @@ public class TraceabilityController {
                     getString(request, "password"));
 
             return ResponseEntity.ok(success("登录成功", result));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(error("登录失败: " + e.getMessage()));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("登录失败: " + ex.getMessage()));
         }
     }
 
@@ -143,6 +153,11 @@ public class TraceabilityController {
     @GetMapping("/blockchain/statistics")
     public ResponseEntity<?> getBlockchainStatistics() {
         return ResponseEntity.ok(success(traceabilityService.getBlockchainStatistics()));
+    }
+
+    @GetMapping("/blockchain/blocks")
+    public ResponseEntity<?> getBlocks() {
+        return ResponseEntity.ok(success(traceabilityService.getAllBlocks()));
     }
 
     @GetMapping("/verify/block/{blockHash}")
