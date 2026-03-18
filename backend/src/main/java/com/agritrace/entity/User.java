@@ -105,6 +105,9 @@ public class User {
     }
 
     public String getUserTypeName() {
+        if (userType == null) {
+            return "-";
+        }
         switch (userType) {
             case "PRODUCER":
                 return "生产者";
@@ -113,7 +116,7 @@ public class User {
             case "LOGISTICS":
                 return "物流商";
             case "RETAILER":
-                return "零售商";
+                return "销售商";
             case "INSPECTOR":
                 return "检测机构";
             case "ADMIN":

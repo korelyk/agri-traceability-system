@@ -63,7 +63,7 @@ public class UserService {
         }
 
         if (!user.isActive()) {
-            throw new RuntimeException("账户已被禁用");
+            throw new RuntimeException("账号已被禁用");
         }
 
         upgradePasswordIfNeeded(user, password);

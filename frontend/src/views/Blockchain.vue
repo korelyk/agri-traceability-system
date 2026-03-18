@@ -23,7 +23,7 @@
         <el-descriptions-item label="挖矿难度">
           {{ blockchainInfo?.difficulty || 0 }}
         </el-descriptions-item>
-        <el-descriptions-item label="已追溯产品">
+        <el-descriptions-item label="已追踪产品">
           {{ blockchainInfo?.productsTraced || 0 }}
         </el-descriptions-item>
         <el-descriptions-item label="数据校验">
@@ -100,7 +100,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
 
@@ -136,12 +136,16 @@ export default {
     }
 
     const formatTime = (timestamp) => {
-      if (!timestamp) return '-'
+      if (!timestamp) {
+        return '-'
+      }
       return new Date(timestamp * 1000).toLocaleString('zh-CN')
     }
 
     const shortHash = (value) => {
-      if (!value) return '-'
+      if (!value) {
+        return '-'
+      }
       return value.length > 24 ? `${value.slice(0, 12)}...${value.slice(-8)}` : value
     }
 

@@ -182,9 +182,10 @@ export default {
     }))
     const userRows = computed(() => toRows(statistics.value.usersByType, {
       PRODUCER: '生产者',
-      PROCESSOR: '加工者',
-      TRANSPORTER: '运输方',
-      RETAILER: '销售方',
+      PROCESSOR: '加工商',
+      LOGISTICS: '物流商',
+      RETAILER: '销售商',
+      INSPECTOR: '检测机构',
       ADMIN: '管理员'
     }))
 

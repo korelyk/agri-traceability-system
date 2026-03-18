@@ -7,11 +7,10 @@
           <el-button @click="$router.back()">返回</el-button>
         </div>
       </template>
-      
+
       <div v-if="traceData">
-        <!-- 产品信息 -->
         <el-descriptions title="产品信息" :column="2" border>
-          <el-descriptions-item label="产品ID">
+          <el-descriptions-item label="产品 ID">
             {{ traceData.product?.productId }}
           </el-descriptions-item>
           <el-descriptions-item label="产品名称">
@@ -38,8 +37,7 @@
             </el-tag>
           </el-descriptions-item>
         </el-descriptions>
-        
-        <!-- 验证信息 -->
+
         <el-alert
           :title="traceData.dataConsistent ? '数据验证通过' : '数据存在异常'"
           :type="traceData.dataConsistent ? 'success' : 'error'"
@@ -47,8 +45,7 @@
           show-icon
           class="verify-alert"
         />
-        
-        <!-- 溯源时间线 -->
+
         <h3 class="section-title">溯源历史</h3>
         <el-timeline>
           <el-timeline-item
@@ -64,29 +61,29 @@
                 <div class="record-header">
                   <span class="operation-type">{{ record.operationTypeName }}</span>
                   <el-tag v-if="record.verified" type="success" size="small">
-                    <el-icon><CircleCheck /></el-icon> 已验证
+                    <el-icon><CircleCheck /></el-icon>
+                    已验证
                   </el-tag>
                 </div>
               </template>
               <div class="record-content">
-                <p><strong>操作者:</strong> {{ record.operatorName }} ({{ record.operatorType }})</p>
-                <p><strong>操作地点:</strong> {{ record.location }}</p>
-                <p><strong>操作详情:</strong> {{ record.operationDetail }}</p>
+                <p><strong>操作人：</strong>{{ record.operatorName }}（{{ record.operatorType }}）</p>
+                <p><strong>操作地点：</strong>{{ record.location }}</p>
+                <p><strong>操作详情：</strong>{{ record.operationDetail }}</p>
                 <div v-if="record.temperature || record.humidity" class="environment-data">
-                  <p><strong>环境数据:</strong></p>
-                  <el-tag v-if="record.temperature" size="small">温度: {{ record.temperature }}°C</el-tag>
-                  <el-tag v-if="record.humidity" size="small">湿度: {{ record.humidity }}%</el-tag>
+                  <p><strong>环境数据：</strong></p>
+                  <el-tag v-if="record.temperature" size="small">温度：{{ record.temperature }}°C</el-tag>
+                  <el-tag v-if="record.humidity" size="small">湿度：{{ record.humidity }}%</el-tag>
                 </div>
                 <div v-if="record.blockHash" class="blockchain-info">
-                  <p><strong>区块哈希:</strong></p>
+                  <p><strong>区块哈希：</strong></p>
                   <code>{{ record.blockHash }}</code>
                 </div>
               </div>
             </el-card>
           </el-timeline-item>
         </el-timeline>
-        
-        <!-- 统计信息 -->
+
         <el-card class="statistics-card">
           <template #header>
             <span>统计信息</span>
@@ -107,7 +104,7 @@
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-value">{{ traceData.statistics?.operationTypes?.length }}</div>
-                <div class="stat-label">操作类型</div>
+                <div class="stat-label">操作类型数</div>
               </div>
             </el-col>
           </el-row>
@@ -118,7 +115,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
@@ -130,65 +127,61 @@ export default {
     const store = useStore()
     const loading = ref(false)
     const traceData = ref(null)
-    
+
     const fetchTraceData = async () => {
       loading.value = true
       const productId = route.params.productId
-      
       const result = await store.dispatch('traceProduct', productId)
-      
+
       if (result.success) {
         traceData.value = result.data
       } else {
         ElMessage.error(result.message)
       }
-      
+
       loading.value = false
     }
-    
+
     const formatTime = (time) => {
-      if (!time) return ''
+      if (!time) {
+        return ''
+      }
       return new Date(time).toLocaleString('zh-CN')
     }
-    
+
     const getStatusType = (status) => {
       const types = {
-        'CREATED': 'info',
-        'PRODUCE': 'success',
-        'PROCESS': 'warning',
-        'TRANSPORT': 'primary',
-        'STORAGE': 'info',
-        'SALE': 'danger'
+        CREATED: 'info',
+        PRODUCE: 'success',
+        PROCESS: 'warning',
+        TRANSPORT: 'primary',
+        STORAGE: 'info',
+        SALE: 'danger'
       }
       return types[status] || 'info'
     }
-    
+
     const getStatusText = (status) => {
       const texts = {
-        'CREATED': '已创建',
-        'PRODUCE': '生产中',
-        'PROCESS': '加工中',
-        'TRANSPORT': '运输中',
-        'STORAGE': '仓储中',
-        'SALE': '销售中'
+        CREATED: '已创建',
+        PRODUCE: '生产中',
+        PROCESS: '加工中',
+        TRANSPORT: '运输中',
+        STORAGE: '仓储中',
+        SALE: '销售中'
       }
-      return texts[status] || status
+      return texts[status] || status || '-'
     }
-    
-    const getTimelineType = (index) => {
-      if (index === 0) return 'primary'
-      return ''
-    }
-    
+
+    const getTimelineType = (index) => (index === 0 ? 'primary' : '')
+
     const getTimelineColor = (index) => {
       const colors = ['#409EFF', '#67C23A', '#E6A23C', '#F56C6C', '#909399']
       return colors[index % colors.length]
     }
-    
-    onMounted(() => {
-      fetchTraceData()
-    })
-    
+
+    onMounted(fetchTraceData)
+
     return {
       loading,
       traceData,
@@ -205,6 +198,12 @@ export default {
 <style scoped>
 .trace-detail-page {
   padding: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .verify-alert {

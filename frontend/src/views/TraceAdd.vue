@@ -7,7 +7,7 @@
         </div>
       </template>
 
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
         <el-form-item label="产品" prop="productId">
           <el-select v-model="form.productId" placeholder="请选择产品" style="width: 100%" filterable>
             <el-option
@@ -36,7 +36,7 @@
             <el-option
               v-for="user in operators"
               :key="user.userId"
-              :label="`${user.realName} - ${user.userTypeName}`"
+              :label="operatorLabel(user)"
               :value="user.userId"
             />
           </el-select>
@@ -47,7 +47,12 @@
         </el-form-item>
 
         <el-form-item label="操作详情" prop="operationDetail">
-          <el-input v-model="form.operationDetail" type="textarea" :rows="4" placeholder="请输入操作详情" />
+          <el-input
+            v-model="form.operationDetail"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入操作详情"
+          />
         </el-form-item>
 
         <el-form-item label="环境数据">
@@ -55,12 +60,12 @@
             v-model="form.environmentData"
             type="textarea"
             :rows="3"
-            placeholder='例如: {"temperature":25,"humidity":60}'
+            placeholder='例如：{"temperature":25,"humidity":60}'
           />
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="handleSubmit" :loading="loading">添加记录</el-button>
+          <el-button type="primary" :loading="loading" @click="handleSubmit">添加记录</el-button>
           <el-button @click="$router.back()">返回</el-button>
         </el-form-item>
       </el-form>
@@ -69,10 +74,14 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
-import { useStore } from 'vuex'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+
+function readableValue(value) {
+  return value && value.trim() && !/^\?+$/.test(value) ? value : ''
+}
 
 export default {
   name: 'TraceAdd',
@@ -101,6 +110,12 @@ export default {
       operationDetail: [{ required: true, message: '请输入操作详情', trigger: 'blur' }]
     }
 
+    const operatorLabel = (user) => {
+      const name = readableValue(user.realName) || user.username
+      const type = readableValue(user.userTypeName) || user.userType || ''
+      return type ? `${name} - ${type}` : name
+    }
+
     const fetchPageData = async () => {
       const [productResult, userResult] = await Promise.all([
         store.dispatch('fetchProducts'),
@@ -122,7 +137,9 @@ export default {
 
     const handleSubmit = async () => {
       const valid = await formRef.value.validate().catch(() => false)
-      if (!valid) return
+      if (!valid) {
+        return
+      }
 
       loading.value = true
       const result = await store.dispatch('addTraceRecord', form)
@@ -145,6 +162,7 @@ export default {
       loading,
       products,
       operators,
+      operatorLabel,
       handleSubmit
     }
   }

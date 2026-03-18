@@ -1,6 +1,5 @@
 <template>
   <div class="dashboard">
-    <!-- 统计卡片 -->
     <el-row :gutter="20" class="statistics-row">
       <el-col :span="6">
         <el-card class="stat-card">
@@ -47,8 +46,7 @@
         </el-card>
       </el-col>
     </el-row>
-    
-    <!-- 区块链状态 -->
+
     <el-row :gutter="20" class="status-row">
       <el-col :span="12">
         <el-card>
@@ -56,34 +54,34 @@
             <div class="card-header">
               <span>区块链状态</span>
               <el-tag :type="blockchainInfo?.chainValid ? 'success' : 'danger'">
-                {{ blockchainInfo?.chainValid ? '运行正常' : '异常' }}
+                {{ blockchainInfo?.chainValid ? '运行正常' : '状态异常' }}
               </el-tag>
             </div>
           </template>
           <div class="blockchain-status">
             <div class="status-item">
-              <span class="status-label">链有效性:</span>
+              <span class="status-label">链有效性</span>
               <el-icon :size="20" :color="blockchainInfo?.chainValid ? '#67C23A' : '#F56C6C'">
                 <CircleCheck v-if="blockchainInfo?.chainValid" />
                 <CircleClose v-else />
               </el-icon>
             </div>
             <div class="status-item">
-              <span class="status-label">总区块数:</span>
+              <span class="status-label">总区块数</span>
               <span class="status-value">{{ blockchainInfo?.totalBlocks || 0 }}</span>
             </div>
             <div class="status-item">
-              <span class="status-label">总交易数:</span>
+              <span class="status-label">总交易数</span>
               <span class="status-value">{{ blockchainInfo?.totalTransactions || 0 }}</span>
             </div>
             <div class="status-item">
-              <span class="status-label">挖矿难度:</span>
+              <span class="status-label">挖矿难度</span>
               <span class="status-value">{{ blockchainInfo?.difficulty || 4 }}</span>
             </div>
           </div>
         </el-card>
       </el-col>
-      
+
       <el-col :span="12">
         <el-card>
           <template #header>
@@ -94,26 +92,25 @@
           <div class="announcements">
             <div class="announcement-item">
               <el-icon color="#409EFF"><InfoFilled /></el-icon>
-              <span>欢迎使用农产品防伪溯源系统</span>
+              <span>欢迎使用农产品防伪溯源系统。</span>
             </div>
             <div class="announcement-item">
               <el-icon color="#67C23A"><SuccessFilled /></el-icon>
-              <span>区块链网络运行正常</span>
+              <span>当前区块链校验状态正常，可用于答辩演示。</span>
             </div>
             <div class="announcement-item">
               <el-icon color="#E6A23C"><WarningFilled /></el-icon>
-              <span>请妥善保管您的私钥信息</span>
+              <span>请妥善保管管理员和演示账号密码。</span>
             </div>
             <div class="announcement-item">
               <el-icon color="#909399"><QuestionFilled /></el-icon>
-              <span>如有问题请联系管理员</span>
+              <span>建议答辩前先走一遍完整演示流程。</span>
             </div>
           </div>
         </el-card>
       </el-col>
     </el-row>
-    
-    <!-- 快捷操作 -->
+
     <el-card class="quick-actions">
       <template #header>
         <span>快捷操作</span>
@@ -125,7 +122,7 @@
         </el-button>
         <el-button type="success" size="large" @click="$router.push('/trace/add')">
           <el-icon><Edit /></el-icon>
-          添加溯源记录
+          新增溯源记录
         </el-button>
         <el-button type="info" size="large" @click="$router.push('/trace')">
           <el-icon><Search /></el-icon>
@@ -148,15 +145,15 @@ export default {
   name: 'Dashboard',
   setup() {
     const store = useStore()
-    
+
     const statistics = computed(() => store.state.statistics)
     const blockchainInfo = computed(() => store.state.blockchainInfo)
-    
+
     onMounted(() => {
       store.dispatch('fetchStatistics')
       store.dispatch('fetchBlockchainInfo')
     })
-    
+
     return {
       statistics,
       blockchainInfo
@@ -208,6 +205,12 @@ export default {
 
 .status-row {
   margin-bottom: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .blockchain-status {

@@ -1,96 +1,92 @@
 package com.agritrace.entity;
 
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
-import com.baomidou.mybatisplus.annotation.*;
 import java.time.LocalDateTime;
 
-/**
- * 溯源记录实体类
- * 记录农产品在供应链中的每个环节信息
- */
 @Data
-@TableName( "trace_records")
+@TableName("trace_records")
 public class TraceRecord {
-    
-        @TableId(value = "record_id", type = IdType.INPUT)
-    private String recordId;            // 记录ID
-    
+
+    @TableId(value = "record_id", type = IdType.INPUT)
+    private String recordId;
+
     @TableField("product_id")
-    private String productId;           // 产品ID
-    
+    private String productId;
+
     @TableField("operation_type")
-    private String operationType;       // 操作类型
-    
+    private String operationType;
+
     @TableField("operation_detail")
-    private String operationDetail;     // 操作详情
-    
+    private String operationDetail;
+
     @TableField("operator_id")
-    private String operatorId;          // 操作者ID
-    
+    private String operatorId;
+
     @TableField("operator_name")
-    private String operatorName;        // 操作者名称
-    
+    private String operatorName;
+
     @TableField("operator_type")
-    private String operatorType;        // 操作者类型（生产者/加工商/物流/销售商）
-    
+    private String operatorType;
+
     @TableField("location")
-    private String location;            // 操作地点
-    
+    private String location;
+
     @TableField("location_code")
-    private String locationCode;        // 地点编码
-    
+    private String locationCode;
+
     @TableField("operation_time")
-    private LocalDateTime operationTime;  // 操作时间
-    
+    private LocalDateTime operationTime;
+
     @TableField("temperature")
-    private Double temperature;         // 温度（物联网数据）
-    
+    private Double temperature;
+
     @TableField("humidity")
-    private Double humidity;            // 湿度（物联网数据）
-    
+    private Double humidity;
+
     @TableField("environment_data")
-    private String environmentData;     // 环境数据JSON
-    
+    private String environmentData;
+
     @TableField("quality_check_result")
-    private String qualityCheckResult;  // 质量检测结果
-    
+    private String qualityCheckResult;
+
     @TableField("certificate_no")
-    private String certificateNo;       // 证书编号
-    
+    private String certificateNo;
+
     @TableField("document_hash")
-    private String documentHash;        // 附件文档哈希
-    
+    private String documentHash;
+
     @TableField("block_hash")
-    private String blockHash;           // 区块哈希
-    
+    private String blockHash;
+
     @TableField("transaction_id")
-    private String transactionId;       // 交易ID
-    
+    private String transactionId;
+
     @TableField("digital_signature")
-    private String digitalSignature;    // 数字签名
-    
+    private String digitalSignature;
+
     @TableField("signer_public_key")
-    private String signerPublicKey;     // 签名者公钥
-    
+    private String signerPublicKey;
+
     @TableField("previous_record_id")
-    private String previousRecordId;    // 前一条记录ID（形成链式结构）
-    
+    private String previousRecordId;
+
     @TableField("created_at")
-    private LocalDateTime createdAt;    // 创建时间
-    
+    private LocalDateTime createdAt;
+
     @TableField("verified")
-    private boolean verified;           // 是否已验证
-    
+    private boolean verified;
+
     public TraceRecord() {
         this.operationTime = LocalDateTime.now();
         this.createdAt = LocalDateTime.now();
         this.verified = false;
     }
-    
-    /**
-     * 创建溯源记录
-     */
+
     public static TraceRecord create(
             String productId,
             String operationType,
@@ -99,7 +95,7 @@ public class TraceRecord {
             String operatorType,
             String location,
             String operationDetail) {
-        
+
         TraceRecord record = new TraceRecord();
         record.setRecordId(java.util.UUID.randomUUID().toString());
         record.setProductId(productId);
@@ -109,13 +105,9 @@ public class TraceRecord {
         record.setOperatorType(operatorType);
         record.setLocation(location);
         record.setOperationDetail(operationDetail);
-        
         return record;
     }
-    
-    /**
-     * 设置物联网环境数据
-     */
+
     public void setEnvironmentData(Double temperature, Double humidity, String additionalData) {
         this.temperature = temperature;
         this.humidity = humidity;
@@ -123,27 +115,21 @@ public class TraceRecord {
             this.environmentData = additionalData;
         }
     }
-    
-    /**
-     * 设置区块链关联信息
-     */
+
     public void setBlockchainInfo(String blockHash, String transactionId) {
         this.blockHash = blockHash;
         this.transactionId = transactionId;
     }
-    
-    /**
-     * 设置数字签名
-     */
+
     public void setSignature(String signature, String publicKey) {
         this.digitalSignature = signature;
         this.signerPublicKey = publicKey;
     }
-    
-    /**
-     * 获取操作类型中文名称
-     */
+
     public String getOperationTypeName() {
+        if (operationType == null) {
+            return "-";
+        }
         switch (operationType) {
             case "PRODUCE":
                 return "生产";
@@ -163,10 +149,7 @@ public class TraceRecord {
                 return operationType;
         }
     }
-    
-    /**
-     * 获取记录摘要
-     */
+
     public String getSummary() {
         return String.format("Trace[%s]: %s - %s - %s - %s",
                 recordId.substring(0, 8),
@@ -175,7 +158,7 @@ public class TraceRecord {
                 location,
                 operationTime);
     }
-    
+
     @Override
     public String toString() {
         return "TraceRecord{" +

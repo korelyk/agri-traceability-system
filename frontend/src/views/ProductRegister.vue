@@ -7,7 +7,7 @@
         </div>
       </template>
 
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
         <el-form-item label="产品名称" prop="productName">
           <el-input v-model="form.productName" placeholder="请输入产品名称" />
         </el-form-item>
@@ -29,7 +29,7 @@
             <el-option
               v-for="producer in producers"
               :key="producer.userId"
-              :label="`${producer.realName} - ${producer.companyName || producer.username}`"
+              :label="producerLabel(producer)"
               :value="producer.userId"
             />
           </el-select>
@@ -40,11 +40,16 @@
         </el-form-item>
 
         <el-form-item label="产品描述" prop="description">
-          <el-input v-model="form.description" type="textarea" :rows="4" placeholder="请输入产品描述" />
+          <el-input
+            v-model="form.description"
+            type="textarea"
+            :rows="4"
+            placeholder="请输入产品描述"
+          />
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="handleSubmit" :loading="loading">注册产品</el-button>
+          <el-button type="primary" :loading="loading" @click="handleSubmit">注册产品</el-button>
           <el-button @click="$router.back()">返回</el-button>
         </el-form-item>
       </el-form>
@@ -53,10 +58,14 @@
 </template>
 
 <script>
-import { ref, reactive, onMounted } from 'vue'
-import { useStore } from 'vuex'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+
+function readableValue(value) {
+  return value && value.trim() && !/^\?+$/.test(value) ? value : ''
+}
 
 export default {
   name: 'ProductRegister',
@@ -82,6 +91,12 @@ export default {
       origin: [{ required: true, message: '请输入产地', trigger: 'blur' }]
     }
 
+    const producerLabel = (producer) => {
+      const name = readableValue(producer.realName) || producer.username
+      const company = readableValue(producer.companyName)
+      return company ? `${name} - ${company}` : name
+    }
+
     const fetchProducers = async () => {
       const result = await store.dispatch('fetchUsersByType', 'PRODUCER')
       if (result.success) {
@@ -93,7 +108,9 @@ export default {
 
     const handleSubmit = async () => {
       const valid = await formRef.value.validate().catch(() => false)
-      if (!valid) return
+      if (!valid) {
+        return
+      }
 
       loading.value = true
       const result = await store.dispatch('registerProduct', form)
@@ -115,6 +132,7 @@ export default {
       rules,
       loading,
       producers,
+      producerLabel,
       handleSubmit
     }
   }

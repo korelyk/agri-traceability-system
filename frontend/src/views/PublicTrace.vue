@@ -9,7 +9,7 @@
     <el-card class="search-card">
       <el-input v-model="searchQuery" placeholder="请输入产品 ID" size="large" class="search-input">
         <template #append>
-          <el-button type="primary" @click="handleSearch" :loading="loading">
+          <el-button type="primary" :loading="loading" @click="handleSearch">
             <el-icon><Search /></el-icon>
             查询
           </el-button>
@@ -23,7 +23,7 @@
           <div class="result-header">
             <span>溯源结果</span>
             <el-tag :type="traceResult.verified ? 'success' : 'warning'">
-              {{ traceResult.verified ? '验证通过' : '数据异常' }}
+              {{ traceResult.verified ? '校验通过' : '数据异常' }}
             </el-tag>
           </div>
         </template>
@@ -46,17 +46,17 @@
             <el-card>
               <h4>{{ item.stage }}</h4>
               <p>{{ item.detail }}</p>
-              <p>操作人: {{ item.operator }}</p>
-              <p>地点: {{ item.location }}</p>
+              <p>操作人：{{ item.operator }}</p>
+              <p>地点：{{ item.location }}</p>
             </el-card>
           </el-timeline-item>
         </el-timeline>
 
         <div class="verification-info">
           <el-alert title="链上验证信息" type="success" :closable="false">
-            <p>区块哈希: {{ traceResult.blockHash }}</p>
-            <p>交易 ID: {{ traceResult.transactionId }}</p>
-            <p>数字签名: {{ traceResult.signature || '无' }}</p>
+            <p>区块哈希：{{ traceResult.blockHash }}</p>
+            <p>交易 ID：{{ traceResult.transactionId }}</p>
+            <p>数字签名：{{ traceResult.signature || '无' }}</p>
           </el-alert>
         </div>
       </el-card>
@@ -65,7 +65,7 @@
 </template>
 
 <script>
-import { ref, onMounted, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
