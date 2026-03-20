@@ -333,6 +333,90 @@ public class TraceabilityService {
     }
 
     public List<Block> getAllBlocks() {
-        return blockchain.getBlocks();
+        return enrichBlocksForDisplay(blockchain.getBlocks());
+    }
+
+    private List<Block> enrichBlocksForDisplay(List<Block> sourceBlocks) {
+        List<Block> blocks = sourceBlocks.stream()
+                .map(block -> Block.fromJson(block.toJson()))
+                .collect(Collectors.toList());
+
+        Set<String> transactionIdsNeedingLookup = blocks.stream()
+                .flatMap(block -> block.getTransactions() == null ? java.util.stream.Stream.<Transaction>empty() : block.getTransactions().stream())
+                .filter(tx -> needsDisplayOperatorName(tx.getOperatorName()))
+                .map(Transaction::getTransactionId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+
+        Set<String> operatorIdsNeedingLookup = blocks.stream()
+                .flatMap(block -> block.getTransactions() == null ? java.util.stream.Stream.<Transaction>empty() : block.getTransactions().stream())
+                .filter(tx -> needsDisplayOperatorName(tx.getOperatorName()))
+                .map(Transaction::getOperatorId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+
+        Map<String, String> operatorNamesByTransactionId = new HashMap<>();
+        if (!transactionIdsNeedingLookup.isEmpty()) {
+            operatorNamesByTransactionId = traceRecordMapper.selectList(
+                    new LambdaQueryWrapper<TraceRecord>()
+                            .in(TraceRecord::getTransactionId, transactionIdsNeedingLookup))
+                    .stream()
+                    .filter(record -> record.getTransactionId() != null)
+                    .filter(record -> hasDisplayText(record.getOperatorName()))
+                    .collect(Collectors.toMap(
+                            TraceRecord::getTransactionId,
+                            TraceRecord::getOperatorName,
+                            (left, right) -> left));
+        }
+
+        Map<String, String> operatorNamesByUserId = new HashMap<>();
+        if (!operatorIdsNeedingLookup.isEmpty()) {
+            operatorNamesByUserId = userMapper.selectList(
+                    new LambdaQueryWrapper<User>()
+                            .in(User::getUserId, operatorIdsNeedingLookup))
+                    .stream()
+                    .filter(user -> user.getUserId() != null)
+                    .collect(Collectors.toMap(
+                            User::getUserId,
+                            user -> hasDisplayText(user.getRealName()) ? user.getRealName() : user.getUsername(),
+                            (left, right) -> left));
+        }
+
+        for (Block block : blocks) {
+            if (block.getTransactions() == null) {
+                continue;
+            }
+            for (Transaction transaction : block.getTransactions()) {
+                if (!needsDisplayOperatorName(transaction.getOperatorName())) {
+                    continue;
+                }
+
+                String displayName = operatorNamesByTransactionId.get(transaction.getTransactionId());
+                if (!hasDisplayText(displayName)) {
+                    displayName = operatorNamesByUserId.get(transaction.getOperatorId());
+                }
+                if (hasDisplayText(displayName)) {
+                    transaction.setOperatorName(displayName);
+                }
+            }
+        }
+
+        return blocks;
+    }
+
+    private boolean needsDisplayOperatorName(String value) {
+        if (value == null || value.isBlank()) {
+            return true;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) != '?') {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean hasDisplayText(String value) {
+        return value != null && !value.isBlank() && !needsDisplayOperatorName(value);
     }
 }
