@@ -69,6 +69,7 @@ import { onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+import { operationTypeDisplay, productCategoryLabel } from '../utils/labels'
 
 const operationOrder = {
   PRODUCE: 1,
@@ -99,7 +100,7 @@ export default {
           return (operationOrder[a.operationType] || 99) - (operationOrder[b.operationType] || 99)
         })
         .map((record) => ({
-          stage: record.operationTypeName || record.operationType,
+          stage: operationTypeDisplay(record.operationTypeName, record.operationType),
           time: record.operationTime ? new Date(record.operationTime).toLocaleString('zh-CN') : '',
           detail: record.operationDetail,
           operator: record.operatorName,
@@ -109,7 +110,7 @@ export default {
       return {
         verified: data.blockchainValid && data.dataConsistent,
         productName: data.product?.productName,
-        category: data.product?.productCategory,
+        category: productCategoryLabel(data.product?.productCategory),
         producer: data.product?.producerName,
         origin: data.product?.origin,
         blockHash: data.product?.blockHash,
@@ -151,6 +152,7 @@ export default {
     return {
       handleSearch,
       loading,
+      productCategoryLabel,
       searchQuery,
       traceResult
     }

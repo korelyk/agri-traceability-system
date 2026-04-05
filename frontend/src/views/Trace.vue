@@ -46,7 +46,7 @@
           {{ searchResult.product?.productName }}
         </el-descriptions-item>
         <el-descriptions-item label="产品类别">
-          {{ searchResult.product?.productCategory }}
+          {{ productCategoryLabel(searchResult.product?.productCategory) }}
         </el-descriptions-item>
         <el-descriptions-item label="生产者">
           {{ searchResult.product?.producerName }}
@@ -68,7 +68,7 @@
           :timestamp="formatTime(record.operationTime)"
         >
           <el-card>
-            <h4>{{ record.operationTypeName }}</h4>
+            <h4>{{ operationTypeDisplay(record.operationTypeName, record.operationType) }}</h4>
             <p>操作人：{{ record.operatorName }}</p>
             <p>地点：{{ record.location }}</p>
             <p>详情：{{ record.operationDetail }}</p>
@@ -84,6 +84,7 @@
 import { ref } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+import { operationTypeDisplay, productCategoryLabel, statusLabel } from '../utils/labels'
 
 export default {
   name: 'Trace',
@@ -117,15 +118,7 @@ export default {
     }
 
     const getStatusText = (status) => {
-      const texts = {
-        CREATED: '已创建',
-        PRODUCE: '生产中',
-        PROCESS: '加工中',
-        TRANSPORT: '运输中',
-        STORAGE: '仓储中',
-        SALE: '销售中'
-      }
-      return texts[status] || status || '-'
+      return statusLabel(status)
     }
 
     return {
@@ -133,7 +126,9 @@ export default {
       searchResult,
       handleSearch,
       formatTime,
-      getStatusText
+      getStatusText,
+      operationTypeDisplay,
+      productCategoryLabel
     }
   }
 }

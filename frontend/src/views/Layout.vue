@@ -89,7 +89,6 @@
 import { computed, ref } from 'vue'
 import { useStore } from 'vuex'
 import { useRoute, useRouter } from 'vue-router'
-
 function isReadableText(value) {
   return value && typeof value === 'string' && value.trim() && !/^\?+$/.test(value)
 }

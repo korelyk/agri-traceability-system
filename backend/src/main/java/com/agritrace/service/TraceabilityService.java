@@ -25,11 +25,15 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
@@ -322,6 +326,64 @@ public class TraceabilityService {
         return transaction != null && digitalSignature.verifyTransaction(transaction);
     }
 
+    public Map<String, Object> getTransactionVerificationDetail(String transactionId) {
+/*
+        Transaction transaction = Optional.ofNullable(blockchain.findTransaction(transactionId))
+                .orElseThrow(() -> new RuntimeException("浜ゆ槗涓嶅瓨鍦?));
+*/
+        Transaction transaction = Optional.ofNullable(blockchain.findTransaction(transactionId))
+                .orElseThrow(() -> new RuntimeException("交易不存在"));
+        Block block = blockchain.findBlockByTransactionId(transactionId);
+        TraceRecord traceRecord = traceRecordMapper.selectOne(
+                new LambdaQueryWrapper<TraceRecord>()
+                        .eq(TraceRecord::getTransactionId, transactionId)
+                        .last("LIMIT 1"));
+        Product product = transaction.getProductId() == null
+                ? null
+                : productMapper.selectById(transaction.getProductId());
+        User operator = transaction.getOperatorId() == null
+                ? null
+                : userMapper.selectById(transaction.getOperatorId());
+
+        boolean signatureValid = digitalSignature.verifyTransaction(transaction);
+        boolean transactionHashValid = Objects.equals(transaction.getTransactionHash(), transaction.calculateHash());
+        boolean blockValid = block != null && block.isValid();
+        boolean chainValid = blockchain.isChainValid();
+        boolean recordFound = traceRecord != null;
+        boolean dbConsistent = traceRecord != null && isTransactionConsistentWithRecord(transaction, traceRecord);
+
+        Map<String, Object> payloadFields = new LinkedHashMap<>();
+        payloadFields.put("transactionId", transaction.getTransactionId());
+        payloadFields.put("timestamp", transaction.getTimestamp());
+        payloadFields.put("productId", transaction.getProductId());
+        payloadFields.put("productName", transaction.getProductName());
+        payloadFields.put("operationType", transaction.getOperationType());
+        payloadFields.put("operatorId", transaction.getOperatorId());
+        payloadFields.put("location", transaction.getLocation());
+        payloadFields.put("operationDetail", transaction.getOperationDetail());
+
+        Map<String, Object> verification = new LinkedHashMap<>();
+        verification.put("signatureValid", signatureValid);
+        verification.put("transactionHashValid", transactionHashValid);
+        verification.put("blockValid", blockValid);
+        verification.put("chainValid", chainValid);
+        verification.put("recordFound", recordFound);
+        verification.put("dbConsistent", dbConsistent);
+        verification.put("overallPassed", signatureValid && transactionHashValid && blockValid && chainValid);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("transaction", transaction);
+        result.put("payloadFields", payloadFields);
+        result.put("payloadText", digitalSignature.getTransactionPayload(transaction));
+        result.put("verification", verification);
+        result.put("traceRecord", traceRecord);
+        result.put("product", product);
+        result.put("operator", operator);
+        result.put("block", buildBlockSummary(block));
+        result.put("signature", buildSignatureSummary(transaction));
+        return result;
+    }
+
     public List<Product> getAllProducts() {
         return productMapper.selectList(new LambdaQueryWrapper<Product>()
                 .orderByDesc(Product::getCreatedAt));
@@ -332,8 +394,249 @@ public class TraceabilityService {
                 .orElseThrow(() -> new RuntimeException("产品不存在"));
     }
 
+    @Transactional
+    public Map<String, Object> rebuildBlockchainFromDatabase() {
+        List<Product> products = productMapper.selectList(new LambdaQueryWrapper<Product>()
+                .orderByAsc(Product::getCreatedAt)
+                .orderByAsc(Product::getProductId));
+        List<TraceRecord> traceRecords = traceRecordMapper.selectList(new LambdaQueryWrapper<TraceRecord>()
+                .orderByAsc(TraceRecord::getOperationTime)
+                .orderByAsc(TraceRecord::getCreatedAt)
+                .orderByAsc(TraceRecord::getRecordId));
+
+        Map<String, Product> productsById = products.stream()
+                .filter(product -> product.getProductId() != null)
+                .collect(Collectors.toMap(
+                        Product::getProductId,
+                        product -> product,
+                        (left, right) -> left));
+
+        Set<String> operatorIds = traceRecords.stream()
+                .map(TraceRecord::getOperatorId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+        Map<String, User> usersById = operatorIds.isEmpty()
+                ? new HashMap<>()
+                : userMapper.selectBatchIds(operatorIds).stream()
+                        .filter(user -> user.getUserId() != null)
+                        .collect(Collectors.toMap(
+                                User::getUserId,
+                                user -> user,
+                                (left, right) -> left));
+
+        int difficulty = blockchain.getDifficulty();
+        List<Block> rebuiltChain = new ArrayList<>();
+        rebuiltChain.add(createGenesisBlock(difficulty));
+
+        Map<String, String> firstTransactionIdByProduct = new HashMap<>();
+        Map<String, String> firstBlockHashByProduct = new HashMap<>();
+        Map<String, String> lastHolderByProduct = new HashMap<>();
+        Map<String, String> lastLocationByProduct = new HashMap<>();
+        Map<String, String> lastStatusByProduct = new HashMap<>();
+
+        int repairedRecords = 0;
+        int generatedTransactionIds = 0;
+
+        for (TraceRecord record : traceRecords) {
+            Product product = Optional.ofNullable(productsById.get(record.getProductId()))
+                    .orElseThrow(() -> new RuntimeException("鍖哄潡閲嶅缓澶辫触: 浜у搧涓嶅瓨鍦? -> " + record.getProductId()));
+            User operator = Optional.ofNullable(usersById.get(record.getOperatorId()))
+                    .orElseThrow(() -> new RuntimeException("鍖哄潡閲嶅缓澶辫触: 鎿嶄綔鑰呬笉瀛樺湪 -> " + record.getOperatorId()));
+
+            if (record.getTransactionId() == null || record.getTransactionId().isBlank()) {
+                record.setTransactionId(UUID.randomUUID().toString());
+                generatedTransactionIds++;
+            }
+
+            Transaction transaction = buildRebuiltTransaction(product, record, operator);
+            Block block = createTraceBlock(rebuiltChain.size(), rebuiltChain.get(rebuiltChain.size() - 1), transaction, record, difficulty);
+            rebuiltChain.add(block);
+
+            record.setBlockHash(block.getBlockHash());
+            record.setSignature(transaction.getDigitalSignature(), transaction.getFromPublicKey());
+            record.setVerified(digitalSignature.verifyTransaction(transaction));
+            traceRecordMapper.updateById(record);
+
+            firstTransactionIdByProduct.putIfAbsent(product.getProductId(), transaction.getTransactionId());
+            firstBlockHashByProduct.putIfAbsent(product.getProductId(), block.getBlockHash());
+            lastHolderByProduct.put(product.getProductId(), record.getOperatorId());
+            lastLocationByProduct.put(product.getProductId(), record.getLocation());
+            lastStatusByProduct.put(product.getProductId(), record.getOperationType());
+            repairedRecords++;
+        }
+
+        for (Product product : products) {
+            String firstTransactionId = firstTransactionIdByProduct.get(product.getProductId());
+            String firstBlockHash = firstBlockHashByProduct.get(product.getProductId());
+            if (firstTransactionId != null) {
+                product.setTransactionId(firstTransactionId);
+            }
+            if (firstBlockHash != null) {
+                product.setBlockHash(firstBlockHash);
+            }
+
+            String currentHolder = lastHolderByProduct.get(product.getProductId());
+            String currentLocation = lastLocationByProduct.get(product.getProductId());
+            String currentStatus = lastStatusByProduct.get(product.getProductId());
+            if (currentHolder != null) {
+                product.setCurrentHolder(currentHolder);
+            }
+            if (currentLocation != null) {
+                product.setCurrentLocation(currentLocation);
+            }
+            if (currentStatus != null) {
+                product.setCurrentStatus(currentStatus);
+            }
+            productMapper.updateById(product);
+        }
+
+        blockchain.replaceChainState(rebuiltChain);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("totalProducts", products.size());
+        result.put("totalTraceRecords", traceRecords.size());
+        result.put("repairedRecords", repairedRecords);
+        result.put("generatedTransactionIds", generatedTransactionIds);
+        result.put("totalBlocks", rebuiltChain.size());
+        result.put("totalTransactions", Math.max(0, rebuiltChain.size() - 1));
+        result.put("chainValid", blockchain.isChainValid());
+        return result;
+    }
+
     public List<Block> getAllBlocks() {
         return enrichBlocksForDisplay(blockchain.getBlocks());
+    }
+
+    private Transaction buildRebuiltTransaction(Product product, TraceRecord record, User operator) {
+        Transaction transaction = new Transaction();
+        String publicKey = firstNonBlank(operator.getPublicKey(), record.getSignerPublicKey());
+        String blockchainAddress = operator.getBlockchainAddress();
+        if ((blockchainAddress == null || blockchainAddress.isBlank()) && publicKey != null && !publicKey.isBlank()) {
+            blockchainAddress = digitalSignature.generateAddress(publicKey);
+        }
+
+        transaction.setTransactionId(record.getTransactionId());
+        transaction.setTimestamp(toEpochSecond(record.getOperationTime(), record.getCreatedAt(), product.getCreatedAt()));
+        transaction.setFromAddress(blockchainAddress);
+        transaction.setFromPublicKey(publicKey);
+        transaction.setProductId(product.getProductId());
+        transaction.setProductName(product.getProductName());
+        transaction.setProductCategory(product.getProductCategory());
+        transaction.setBatchNumber(product.getBatchNumber());
+        transaction.setOperationType(record.getOperationType());
+        transaction.setOperationDetail(record.getOperationDetail());
+        transaction.setOperatorId(record.getOperatorId());
+        transaction.setOperatorName(firstNonBlank(record.getOperatorName(), operator.getRealName(), operator.getUsername()));
+        transaction.setLocation(record.getLocation());
+        transaction.setLocationCode(record.getLocationCode());
+        transaction.setEnvironmentData(record.getEnvironmentData());
+        transaction.setTemperature(record.getTemperature());
+        transaction.setHumidity(record.getHumidity());
+        transaction.setQualityGrade(product.getQualityGrade());
+        transaction.setInspectionResult(record.getQualityCheckResult());
+        transaction.setCertificateNo(record.getCertificateNo());
+        transaction.setDocumentHash(record.getDocumentHash());
+        transaction.setTransactionHash(transaction.calculateHash());
+
+        if (publicKey == null || publicKey.isBlank()) {
+            throw new RuntimeException("鍖哄潡閲嶅缓澶辫触: 鎿嶄綔鑰呯己灏戝叕閽? -> " + operator.getUserId());
+        }
+
+        String privateKey = keySecurityService.decrypt(operator.getPrivateKey());
+        if (privateKey == null || privateKey.isBlank()) {
+            throw new RuntimeException("鍖哄潡閲嶅缓澶辫触: 鎿嶄綔鑰呯己灏戠閽? -> " + operator.getUserId());
+        }
+        transaction.setDigitalSignature(digitalSignature.signTransaction(transaction, privateKey));
+        return transaction;
+    }
+
+    private Block createGenesisBlock(int difficulty) {
+        Block genesisBlock = new Block(0, "0", new ArrayList<>());
+        genesisBlock.setTraceId("GENESIS");
+        genesisBlock.setProductId("GENESIS");
+        genesisBlock.setOperationType("GENESIS");
+        genesisBlock.setTimestamp(System.currentTimeMillis() / 1000);
+        genesisBlock.setDifficulty(difficulty);
+        genesisBlock.setMerkleRoot(genesisBlock.calculateMerkleRoot());
+        genesisBlock.setBlockHash(genesisBlock.calculateHash());
+        genesisBlock.mineBlock();
+        return genesisBlock;
+    }
+
+    private Block createTraceBlock(int index, Block previousBlock, Transaction transaction, TraceRecord record, int difficulty) {
+        Block block = new Block(index, previousBlock.getBlockHash(), List.of(transaction));
+        block.setTraceId(record.getRecordId());
+        block.setProductId(record.getProductId());
+        block.setOperationType(record.getOperationType());
+        block.setOperatorId(record.getOperatorId());
+        block.setTimestamp(transaction.getTimestamp());
+        block.setDifficulty(difficulty);
+        block.setMerkleRoot(block.calculateMerkleRoot());
+        block.setBlockHash(block.calculateHash());
+        block.mineBlock();
+        return block;
+    }
+
+    private long toEpochSecond(LocalDateTime... candidates) {
+        for (LocalDateTime candidate : candidates) {
+            if (candidate != null) {
+                return candidate.atZone(ZoneId.systemDefault()).toEpochSecond();
+            }
+        }
+        return System.currentTimeMillis() / 1000;
+    }
+
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private Map<String, Object> buildBlockSummary(Block block) {
+        if (block == null) {
+            return null;
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("index", block.getIndex());
+        summary.put("blockHash", block.getBlockHash());
+        summary.put("previousHash", block.getPreviousHash());
+        summary.put("merkleRoot", block.getMerkleRoot());
+        summary.put("timestamp", block.getTimestamp());
+        summary.put("difficulty", block.getDifficulty());
+        summary.put("nonce", block.getNonce());
+        summary.put("valid", block.isValid());
+        return summary;
+    }
+
+    private Map<String, Object> buildSignatureSummary(Transaction transaction) {
+        Map<String, Object> signature = new LinkedHashMap<>();
+        String publicKey = transaction.getFromPublicKey();
+        signature.put("algorithm", "RSA / SHA256withRSA");
+        signature.put("digitalSignature", transaction.getDigitalSignature());
+        signature.put("publicKey", publicKey);
+        signature.put("publicKeyFingerprint", publicKey == null || publicKey.isBlank()
+                ? null
+                : digitalSignature.calculateHash(publicKey).substring(0, 24));
+        signature.put("blockchainAddress", transaction.getFromAddress());
+        return signature;
+    }
+
+    private boolean isTransactionConsistentWithRecord(Transaction transaction, TraceRecord record) {
+        return sameText(transaction.getTransactionId(), record.getTransactionId())
+                && sameText(transaction.getProductId(), record.getProductId())
+                && sameText(transaction.getOperationType(), record.getOperationType())
+                && sameText(transaction.getOperatorId(), record.getOperatorId())
+                && sameText(transaction.getLocation(), record.getLocation())
+                && sameText(transaction.getOperationDetail(), record.getOperationDetail())
+                && sameText(transaction.getDigitalSignature(), record.getDigitalSignature());
+    }
+
+    private boolean sameText(String left, String right) {
+        return Objects.equals(left, right);
     }
 
     private List<Block> enrichBlocksForDisplay(List<Block> sourceBlocks) {
@@ -341,39 +644,42 @@ public class TraceabilityService {
                 .map(block -> Block.fromJson(block.toJson()))
                 .collect(Collectors.toList());
 
-        Set<String> transactionIdsNeedingLookup = blocks.stream()
+        Set<String> transactionIds = blocks.stream()
                 .flatMap(block -> block.getTransactions() == null ? java.util.stream.Stream.<Transaction>empty() : block.getTransactions().stream())
-                .filter(tx -> needsDisplayOperatorName(tx.getOperatorName()))
                 .map(Transaction::getTransactionId)
                 .filter(id -> id != null && !id.isBlank())
                 .collect(Collectors.toSet());
 
-        Set<String> operatorIdsNeedingLookup = blocks.stream()
+        Set<String> operatorIds = blocks.stream()
                 .flatMap(block -> block.getTransactions() == null ? java.util.stream.Stream.<Transaction>empty() : block.getTransactions().stream())
-                .filter(tx -> needsDisplayOperatorName(tx.getOperatorName()))
                 .map(Transaction::getOperatorId)
                 .filter(id -> id != null && !id.isBlank())
                 .collect(Collectors.toSet());
 
-        Map<String, String> operatorNamesByTransactionId = new HashMap<>();
-        if (!transactionIdsNeedingLookup.isEmpty()) {
-            operatorNamesByTransactionId = traceRecordMapper.selectList(
+        Set<String> productIds = blocks.stream()
+                .flatMap(block -> block.getTransactions() == null ? java.util.stream.Stream.<Transaction>empty() : block.getTransactions().stream())
+                .map(Transaction::getProductId)
+                .filter(id -> id != null && !id.isBlank())
+                .collect(Collectors.toSet());
+
+        Map<String, TraceRecord> traceRecordsByTransactionId = new HashMap<>();
+        if (!transactionIds.isEmpty()) {
+            traceRecordsByTransactionId = traceRecordMapper.selectList(
                     new LambdaQueryWrapper<TraceRecord>()
-                            .in(TraceRecord::getTransactionId, transactionIdsNeedingLookup))
+                            .in(TraceRecord::getTransactionId, transactionIds))
                     .stream()
                     .filter(record -> record.getTransactionId() != null)
-                    .filter(record -> hasDisplayText(record.getOperatorName()))
                     .collect(Collectors.toMap(
                             TraceRecord::getTransactionId,
-                            TraceRecord::getOperatorName,
+                            record -> record,
                             (left, right) -> left));
         }
 
         Map<String, String> operatorNamesByUserId = new HashMap<>();
-        if (!operatorIdsNeedingLookup.isEmpty()) {
+        if (!operatorIds.isEmpty()) {
             operatorNamesByUserId = userMapper.selectList(
                     new LambdaQueryWrapper<User>()
-                            .in(User::getUserId, operatorIdsNeedingLookup))
+                            .in(User::getUserId, operatorIds))
                     .stream()
                     .filter(user -> user.getUserId() != null)
                     .collect(Collectors.toMap(
@@ -382,21 +688,49 @@ public class TraceabilityService {
                             (left, right) -> left));
         }
 
+        Map<String, Product> productsById = new HashMap<>();
+        if (!productIds.isEmpty()) {
+            productsById = productMapper.selectBatchIds(productIds).stream()
+                    .filter(product -> product.getProductId() != null)
+                    .collect(Collectors.toMap(
+                            Product::getProductId,
+                            product -> product,
+                            (left, right) -> left));
+        }
+
         for (Block block : blocks) {
             if (block.getTransactions() == null) {
                 continue;
             }
             for (Transaction transaction : block.getTransactions()) {
-                if (!needsDisplayOperatorName(transaction.getOperatorName())) {
-                    continue;
+                TraceRecord traceRecord = traceRecordsByTransactionId.get(transaction.getTransactionId());
+                if (traceRecord != null) {
+                    if (hasDisplayText(traceRecord.getOperatorName())) {
+                        transaction.setOperatorName(traceRecord.getOperatorName());
+                    }
+                    if (hasDisplayText(traceRecord.getLocation())) {
+                        transaction.setLocation(traceRecord.getLocation());
+                    }
+                    if (hasDisplayText(traceRecord.getOperationDetail())) {
+                        transaction.setOperationDetail(traceRecord.getOperationDetail());
+                    }
                 }
 
-                String displayName = operatorNamesByTransactionId.get(transaction.getTransactionId());
-                if (!hasDisplayText(displayName)) {
-                    displayName = operatorNamesByUserId.get(transaction.getOperatorId());
+                Product product = productsById.get(transaction.getProductId());
+                if (product != null) {
+                    if (hasDisplayText(product.getProductName())) {
+                        transaction.setProductName(product.getProductName());
+                    }
+                    if (hasDisplayText(product.getProductCategory())) {
+                        transaction.setProductCategory(product.getProductCategory());
+                    }
                 }
-                if (hasDisplayText(displayName)) {
-                    transaction.setOperatorName(displayName);
+
+                if (!hasDisplayText(transaction.getOperatorName())) {
+                    String displayName = operatorNamesByUserId.get(transaction.getOperatorId());
+                    if (hasDisplayText(displayName)) {
+                        transaction.setOperatorName(displayName);
+                    }
                 }
             }
         }

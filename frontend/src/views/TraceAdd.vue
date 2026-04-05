@@ -78,6 +78,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+import { userTypeDisplay } from '../utils/labels'
 
 function readableValue(value) {
   return value && value.trim() && !/^\?+$/.test(value) ? value : ''
@@ -112,7 +113,7 @@ export default {
 
     const operatorLabel = (user) => {
       const name = readableValue(user.realName) || user.username
-      const type = readableValue(user.userTypeName) || user.userType || ''
+      const type = userTypeDisplay(user.userTypeName, user.userType)
       return type ? `${name} - ${type}` : name
     }
 

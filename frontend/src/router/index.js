@@ -50,6 +50,12 @@ const routes = [
         meta: { title: '溯源详情', hidden: true }
       },
       {
+        path: 'verify/transaction/:transactionId',
+        name: 'SignatureDetail',
+        component: () => import('../views/SignatureDetail.vue'),
+        meta: { title: '签名验签详情', hidden: true }
+      },
+      {
         path: 'blockchain',
         name: 'Blockchain',
         component: () => import('../views/Blockchain.vue'),

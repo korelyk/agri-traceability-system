@@ -21,7 +21,15 @@
           {{ blockchainInfo?.pendingTransactions || 0 }}
         </el-descriptions-item>
         <el-descriptions-item label="挖矿难度">
-          {{ blockchainInfo?.difficulty || 0 }}
+          <span class="with-help">
+            {{ blockchainInfo?.difficulty || 0 }}
+            <el-tooltip
+              content="表示新区块生成时需要满足的哈希计算门槛，当前难度 4 代表区块哈希前 4 位需为 0。"
+              placement="top"
+            >
+              <el-icon class="help-icon"><QuestionFilled /></el-icon>
+            </el-tooltip>
+          </span>
         </el-descriptions-item>
         <el-descriptions-item label="已追踪产品">
           {{ blockchainInfo?.productsTraced || 0 }}
@@ -62,7 +70,7 @@
             <el-descriptions-item label="时间">
               {{ formatTime(block.timestamp) }}
             </el-descriptions-item>
-            <el-descriptions-item label="Nonce">
+            <el-descriptions-item label="随机数（Nonce）">
               {{ block.nonce }}
             </el-descriptions-item>
             <el-descriptions-item label="难度">
@@ -72,7 +80,7 @@
               {{ block.productId || '-' }}
             </el-descriptions-item>
             <el-descriptions-item label="操作类型">
-              {{ block.operationType || '-' }}
+              {{ operationTypeLabel(block.operationType) }}
             </el-descriptions-item>
             <el-descriptions-item label="交易数量">
               {{ block.transactions?.length || 0 }}
@@ -82,15 +90,31 @@
           <div v-if="block.transactions?.length" class="transactions">
             <h4>交易明细</h4>
             <el-table :data="block.transactions" size="small">
-              <el-table-column prop="transactionId" label="交易ID" min-width="180">
+              <el-table-column prop="transactionId" label="交易 ID" min-width="180">
                 <template #default="{ row }">
                   <code>{{ shortHash(row.transactionId) }}</code>
                 </template>
               </el-table-column>
-              <el-table-column prop="productId" label="产品ID" min-width="160" />
-              <el-table-column prop="operationType" label="操作类型" width="120" />
+              <el-table-column prop="productId" label="产品 ID" min-width="160" />
+              <el-table-column label="操作类型" width="120">
+                <template #default="{ row }">
+                  {{ operationTypeLabel(row.operationType) }}
+                </template>
+              </el-table-column>
               <el-table-column prop="operatorName" label="操作人" width="140" />
               <el-table-column prop="location" label="地点" min-width="140" />
+              <el-table-column label="验签" width="120" fixed="right">
+                <template #default="{ row }">
+                  <el-button
+                    link
+                    type="primary"
+                    :disabled="!row.transactionId"
+                    @click="viewSignature(row.transactionId)"
+                  >
+                    验签详情
+                  </el-button>
+                </template>
+              </el-table-column>
             </el-table>
           </div>
         </el-collapse-item>
@@ -101,12 +125,15 @@
 
 <script>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+import { operationTypeLabel } from '../utils/labels'
 
 export default {
   name: 'Blockchain',
   setup() {
+    const router = useRouter()
     const store = useStore()
     const loading = ref(false)
     const blocks = ref([])
@@ -149,16 +176,25 @@ export default {
       return value.length > 24 ? `${value.slice(0, 12)}...${value.slice(-8)}` : value
     }
 
+    const viewSignature = (transactionId) => {
+      if (!transactionId) {
+        return
+      }
+      router.push(`/verify/transaction/${transactionId}`)
+    }
+
     onMounted(fetchData)
 
     return {
-      loading,
-      blocks,
       activeBlocks,
       blockchainInfo,
+      blocks,
       fetchData,
       formatTime,
-      shortHash
+      loading,
+      operationTypeLabel,
+      shortHash,
+      viewSignature
     }
   }
 }
@@ -198,5 +234,16 @@ code {
   font-family: 'Courier New', monospace;
   font-size: 12px;
   word-break: break-all;
+}
+
+.with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.help-icon {
+  color: #909399;
+  cursor: help;
 }
 </style>

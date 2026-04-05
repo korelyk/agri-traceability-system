@@ -157,6 +157,14 @@ export default createStore({
       }
     },
 
+    async deleteUser(_, userId) {
+      try {
+        return await request.delete(`/users/${userId}`)
+      } catch (error) {
+        return { success: false, message: errorMessage(error, '删除用户失败') }
+      }
+    },
+
     async verifyBlock(_, blockHash) {
       try {
         return await request.get(`/verify/block/${blockHash}`)
@@ -170,6 +178,14 @@ export default createStore({
         return await request.get(`/verify/transaction/${transactionId}`)
       } catch (error) {
         return { success: false, message: errorMessage(error, '交易验证失败') }
+      }
+    },
+
+    async fetchTransactionVerificationDetail(_, transactionId) {
+      try {
+        return await request.get(`/verify/transaction/detail/${transactionId}`)
+      } catch (error) {
+        return { success: false, message: errorMessage(error, '获取交易验签详情失败') }
       }
     }
   }

@@ -14,7 +14,11 @@
       <el-table :data="users" style="width: 100%" v-loading="loading">
         <el-table-column prop="username" label="用户名" />
         <el-table-column prop="realName" label="姓名" />
-        <el-table-column prop="userTypeName" label="用户类型" />
+        <el-table-column label="用户类型">
+          <template #default="{ row }">
+            {{ userTypeDisplay(row.userTypeName, row.userType) }}
+          </template>
+        </el-table-column>
         <el-table-column label="公司名称">
           <template #default="{ row }">
             {{ readableValue(row.companyName) || '-' }}
@@ -32,10 +36,19 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="180">
           <template #default="{ row }">
             <el-button link type="primary" @click="viewUser(row)">
               查看
+            </el-button>
+            <el-button
+              v-if="canDeleteUser(row)"
+              link
+              type="danger"
+              :loading="deletingUserId === row.userId"
+              @click="handleDeleteUser(row)"
+            >
+              删除
             </el-button>
           </template>
         </el-table-column>
@@ -79,13 +92,13 @@
       <el-descriptions v-if="selectedUser" :column="1" border>
         <el-descriptions-item label="用户名">{{ selectedUser.username }}</el-descriptions-item>
         <el-descriptions-item label="姓名">{{ readableValue(selectedUser.realName) || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="用户类型">{{ selectedUser.userTypeName || selectedUser.userType }}</el-descriptions-item>
+        <el-descriptions-item label="用户类型">{{ userTypeDisplay(selectedUser.userTypeName, selectedUser.userType) }}</el-descriptions-item>
         <el-descriptions-item label="公司名称">{{ readableValue(selectedUser.companyName) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="邮箱">{{ readableValue(selectedUser.email) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="电话">{{ readableValue(selectedUser.phone) || '-' }}</el-descriptions-item>
         <el-descriptions-item label="认证状态">{{ selectedUser.verified ? '已认证' : '未认证' }}</el-descriptions-item>
         <el-descriptions-item label="启用状态">{{ selectedUser.active ? '已启用' : '已停用' }}</el-descriptions-item>
-        <el-descriptions-item label="角色">{{ selectedUser.role || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="角色">{{ roleLabel(selectedUser.role) }}</el-descriptions-item>
         <el-descriptions-item label="区块链地址">{{ selectedUser.blockchainAddress || '-' }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
@@ -95,7 +108,8 @@
 <script>
 import { onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { roleLabel, userTypeDisplay } from '../utils/labels'
 
 function readableValue(value) {
   return value && value.trim() && !/^\?+$/.test(value) ? value : ''
@@ -110,6 +124,7 @@ export default {
     const showRegisterDialog = ref(false)
     const showDetailDialog = ref(false)
     const adding = ref(false)
+    const deletingUserId = ref('')
     const userFormRef = ref(null)
     const selectedUser = ref(null)
 
@@ -173,6 +188,41 @@ export default {
       showDetailDialog.value = true
     }
 
+    const canDeleteUser = (user) => {
+      return store.getters.isAdmin && user?.userId && user.userId !== store.state.user?.userId
+    }
+
+    const handleDeleteUser = async (user) => {
+      try {
+        await ElMessageBox.confirm(
+          `确认删除用户“${user.username}”吗？此操作不可撤销。`,
+          '删除用户',
+          {
+            type: 'warning',
+            confirmButtonText: '确认删除',
+            cancelButtonText: '取消'
+          }
+        )
+      } catch {
+        return
+      }
+
+      deletingUserId.value = user.userId
+      const result = await store.dispatch('deleteUser', user.userId)
+      deletingUserId.value = ''
+
+      if (result.success) {
+        ElMessage.success(result.message || '用户删除成功')
+        if (selectedUser.value?.userId === user.userId) {
+          showDetailDialog.value = false
+          selectedUser.value = null
+        }
+        fetchUsers()
+      } else {
+        ElMessage.error(result.message)
+      }
+    }
+
     const shortAddress = (value) => {
       if (!value) {
         return '-'
@@ -188,13 +238,18 @@ export default {
       showRegisterDialog,
       showDetailDialog,
       adding,
+      deletingUserId,
       userFormRef,
       selectedUser,
       newUser,
       userRules,
       readableValue,
+      roleLabel,
       shortAddress,
+      userTypeDisplay,
+      canDeleteUser,
       handleAddUser,
+      handleDeleteUser,
       viewUser
     }
   }

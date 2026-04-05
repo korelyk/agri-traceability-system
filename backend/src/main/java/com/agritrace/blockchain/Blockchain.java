@@ -176,6 +176,20 @@ public class Blockchain {
         return null;
     }
 
+    public synchronized Block findBlockByTransactionId(String transactionId) {
+        for (Block block : chain) {
+            if (block.getTransactions() == null) {
+                continue;
+            }
+            for (Transaction tx : block.getTransactions()) {
+                if (transactionId.equals(tx.getTransactionId())) {
+                    return block;
+                }
+            }
+        }
+        return null;
+    }
+
     public synchronized List<Block> getBlocks() {
         return chain.stream()
                 .sorted(Comparator.comparingInt(Block::getIndex).reversed())
@@ -201,6 +215,18 @@ public class Blockchain {
 
     public synchronized String exportToJson() {
         return GSON.toJson(buildState());
+    }
+
+    public synchronized void replaceChainState(List<Block> rebuiltChain) {
+        chain = rebuiltChain != null ? new ArrayList<>(rebuiltChain) : new ArrayList<>();
+        pendingTransactions = new ArrayList<>();
+
+        if (chain.isEmpty()) {
+            createGenesisBlock();
+        }
+
+        rebuildIndexes();
+        persistState();
     }
 
     public synchronized void printChain() {

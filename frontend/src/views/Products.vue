@@ -14,7 +14,11 @@
       <el-table :data="products" style="width: 100%" v-loading="loading">
         <el-table-column prop="productId" label="产品ID" width="220" />
         <el-table-column prop="productName" label="产品名称" />
-        <el-table-column prop="productCategory" label="类别" width="120" />
+        <el-table-column label="类别" width="120">
+          <template #default="scope">
+            {{ productCategoryLabel(scope.row.productCategory) }}
+          </template>
+        </el-table-column>
         <el-table-column prop="producerName" label="生产者" />
         <el-table-column prop="origin" label="产地" />
         <el-table-column prop="currentStatus" label="状态" width="120">
@@ -60,8 +64,9 @@ import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import QrcodeVue from 'qrcode.vue'
+import { productCategoryLabel, statusLabel } from '../utils/labels'
 
-const DEFAULT_PUBLIC_BASE_URL = process.env.VUE_APP_PUBLIC_BASE_URL || 'https://bishe.yyy999.my'
+const DEFAULT_PUBLIC_BASE_URL = process.env.VUE_APP_PUBLIC_BASE_URL || 'https://trace2026.yyy999.my'
 
 function buildPublicTraceUrl(productId) {
   const baseUrl = DEFAULT_PUBLIC_BASE_URL.replace(/\/+$/, '')
@@ -107,15 +112,7 @@ export default {
     }
 
     const getStatusText = (status) => {
-      const texts = {
-        CREATED: '已创建',
-        PRODUCE: '生产中',
-        PROCESS: '加工中',
-        TRANSPORT: '运输中',
-        STORAGE: '仓储中',
-        SALE: '销售中'
-      }
-      return texts[status] || status
+      return statusLabel(status)
     }
 
     const viewTrace = (productId) => {
@@ -134,6 +131,7 @@ export default {
       loading,
       qrDialogVisible,
       currentQRCodeUrl,
+      productCategoryLabel,
       getStatusType,
       getStatusText,
       viewTrace,

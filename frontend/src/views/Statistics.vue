@@ -127,6 +127,12 @@
 <script>
 import { computed, onMounted } from 'vue'
 import { useStore } from 'vuex'
+import {
+  OPERATION_TYPE_LABELS,
+  PRODUCT_CATEGORY_LABELS,
+  STATUS_LABELS,
+  USER_TYPE_LABELS
+} from '../utils/labels'
 
 function toRows(mapData, labelMap = {}) {
   const entries = Object.entries(mapData || {})
@@ -163,31 +169,10 @@ export default {
       { label: '链验证状态', value: blockchainInfo.value.chainValid ? '正常' : '异常', icon: 'CircleCheck', color: blockchainInfo.value.chainValid ? '#67C23A' : '#F56C6C' }
     ])
 
-    const categoryRows = computed(() => toRows(statistics.value.productsByCategory))
-    const statusRows = computed(() => toRows(statistics.value.productsByStatus, {
-      CREATED: '已创建',
-      PROCESS: '加工中',
-      TRANSPORT: '运输中',
-      STORAGE: '仓储中',
-      SALE: '销售中'
-    }))
-    const operationRows = computed(() => toRows(statistics.value.recordsByOperationType, {
-      PRODUCE: '生产',
-      PROCESS: '加工',
-      TRANSPORT: '运输',
-      STORAGE: '仓储',
-      SALE: '销售',
-      INSPECT: '检测',
-      PACKAGE: '包装'
-    }))
-    const userRows = computed(() => toRows(statistics.value.usersByType, {
-      PRODUCER: '生产者',
-      PROCESSOR: '加工商',
-      LOGISTICS: '物流商',
-      RETAILER: '销售商',
-      INSPECTOR: '检测机构',
-      ADMIN: '管理员'
-    }))
+    const categoryRows = computed(() => toRows(statistics.value.productsByCategory, PRODUCT_CATEGORY_LABELS))
+    const statusRows = computed(() => toRows(statistics.value.productsByStatus, STATUS_LABELS))
+    const operationRows = computed(() => toRows(statistics.value.recordsByOperationType, OPERATION_TYPE_LABELS))
+    const userRows = computed(() => toRows(statistics.value.usersByType, USER_TYPE_LABELS))
 
     onMounted(async () => {
       await Promise.all([

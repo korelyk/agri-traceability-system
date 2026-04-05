@@ -140,6 +140,10 @@ public class DigitalSignature {
         return verify(data, transaction.getDigitalSignature(), transaction.getFromPublicKey());
     }
 
+    public String getTransactionPayload(Transaction transaction) {
+        return buildTransactionData(transaction);
+    }
+
     /**
      * 构建交易数据字符串
      */

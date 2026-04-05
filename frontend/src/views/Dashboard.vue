@@ -75,7 +75,15 @@
               <span class="status-value">{{ blockchainInfo?.totalTransactions || 0 }}</span>
             </div>
             <div class="status-item">
-              <span class="status-label">挖矿难度</span>
+              <span class="status-label with-help">
+                挖矿难度
+                <el-tooltip
+                  content="表示新区块生成时需要满足的哈希计算门槛，当前难度 4 代表区块哈希前 4 位需为 0。"
+                  placement="top"
+                >
+                  <el-icon class="help-icon"><QuestionFilled /></el-icon>
+                </el-tooltip>
+              </span>
               <span class="status-value">{{ blockchainInfo?.difficulty || 4 }}</span>
             </div>
           </div>
@@ -90,21 +98,19 @@
             </div>
           </template>
           <div class="announcements">
-            <div class="announcement-item">
-              <el-icon color="#409EFF"><InfoFilled /></el-icon>
-              <span>欢迎使用农产品防伪溯源系统。</span>
-            </div>
-            <div class="announcement-item">
-              <el-icon color="#67C23A"><SuccessFilled /></el-icon>
-              <span>当前区块链校验状态正常，可用于答辩演示。</span>
-            </div>
-            <div class="announcement-item">
-              <el-icon color="#E6A23C"><WarningFilled /></el-icon>
-              <span>请妥善保管管理员和演示账号密码。</span>
-            </div>
-            <div class="announcement-item">
-              <el-icon color="#909399"><QuestionFilled /></el-icon>
-              <span>建议答辩前先走一遍完整演示流程。</span>
+            <div v-for="item in announcements" :key="item.title" class="announcement-item">
+              <div class="announcement-icon" :style="{ backgroundColor: item.softColor }">
+                <el-icon :color="item.color">
+                  <component :is="item.icon" />
+                </el-icon>
+              </div>
+              <div class="announcement-content">
+                <div class="announcement-title-row">
+                  <span class="announcement-title">{{ item.title }}</span>
+                  <el-tag size="small" :type="item.tagType">{{ item.tagText }}</el-tag>
+                </div>
+                <p class="announcement-text">{{ item.content }}</p>
+              </div>
             </div>
           </div>
         </el-card>
@@ -148,6 +154,46 @@ export default {
 
     const statistics = computed(() => store.state.statistics)
     const blockchainInfo = computed(() => store.state.blockchainInfo)
+    const announcements = computed(() => [
+      {
+        title: '系统状态',
+        content: blockchainInfo.value?.chainValid
+          ? '当前链上校验通过，产品建档、流转记录、公开查询与区块验证服务运行正常。'
+          : '当前链状态异常，建议及时核查服务状态、链校验结果与数据同步情况。',
+        icon: blockchainInfo.value?.chainValid ? 'SuccessFilled' : 'WarningFilled',
+        color: blockchainInfo.value?.chainValid ? '#67C23A' : '#E6A23C',
+        softColor: blockchainInfo.value?.chainValid ? '#F0F9EB' : '#FDF6EC',
+        tagType: blockchainInfo.value?.chainValid ? 'success' : 'warning',
+        tagText: blockchainInfo.value?.chainValid ? '正常' : '预警'
+      },
+      {
+        title: '业务流程',
+        content: '系统已覆盖产品建档、加工流转、公开溯源、链上校验等核心环节，支持完整业务闭环管理。',
+        icon: 'InfoFilled',
+        color: '#409EFF',
+        softColor: '#ECF5FF',
+        tagType: 'info',
+        tagText: '已启用'
+      },
+      {
+        title: '数据质量',
+        content: '当前产品档案、主体信息、产地信息与流转记录已完成规范化处理，支持统一中文展示与查询。',
+        icon: 'DocumentChecked',
+        color: '#8E44AD',
+        softColor: '#F4ECF7',
+        tagType: 'success',
+        tagText: '已校准'
+      },
+      {
+        title: '运维提示',
+        content: '建议定期检查账号鉴权状态、服务健康接口与公开访问链路，确保系统持续稳定运行。',
+        icon: 'Bell',
+        color: '#909399',
+        softColor: '#F4F4F5',
+        tagType: 'info',
+        tagText: '关注'
+      }
+    ])
 
     onMounted(() => {
       store.dispatch('fetchStatistics')
@@ -156,7 +202,8 @@ export default {
 
     return {
       statistics,
-      blockchainInfo
+      blockchainInfo,
+      announcements
     }
   }
 }
@@ -233,6 +280,17 @@ export default {
   color: #606266;
 }
 
+.with-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.help-icon {
+  color: #909399;
+  cursor: help;
+}
+
 .status-value {
   font-weight: bold;
   color: #303133;
@@ -244,8 +302,9 @@ export default {
 
 .announcement-item {
   display: flex;
-  align-items: center;
-  padding: 12px 0;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
   border-bottom: 1px solid #EBEEF5;
 }
 
@@ -253,8 +312,38 @@ export default {
   border-bottom: none;
 }
 
-.announcement-item .el-icon {
-  margin-right: 10px;
+.announcement-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.announcement-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.announcement-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.announcement-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.announcement-text {
+  margin: 8px 0 0;
+  line-height: 1.65;
+  color: #606266;
 }
 
 .quick-actions {

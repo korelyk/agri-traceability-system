@@ -9,6 +9,7 @@ import com.google.gson.Gson;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -145,6 +146,27 @@ public class TraceabilityController {
         return ResponseEntity.ok(success(userService.getUsersByType(userType)));
     }
 
+    @DeleteMapping("/users/{userId}")
+    public ResponseEntity<?> deleteUser(@PathVariable String userId, HttpServletRequest request) {
+        try {
+            String currentUserId = (String) request.getAttribute("currentUserId");
+            String currentUserRole = (String) request.getAttribute("currentUserRole");
+
+            if (!"ADMIN".equals(currentUserRole)) {
+                return ResponseEntity.status(403).body(error("仅管理员可删除用户"));
+            }
+
+            if (userId != null && userId.equals(currentUserId)) {
+                return ResponseEntity.badRequest().body(error("不能删除当前登录用户"));
+            }
+
+            userService.deleteUser(userId);
+            return ResponseEntity.ok(success("用户删除成功", null));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("用户删除失败: " + ex.getMessage()));
+        }
+    }
+
     @GetMapping("/statistics")
     public ResponseEntity<?> getStatistics() {
         return ResponseEntity.ok(success(traceabilityService.getSystemStatistics()));
@@ -158,6 +180,21 @@ public class TraceabilityController {
     @GetMapping("/blockchain/blocks")
     public ResponseEntity<?> getBlocks() {
         return ResponseEntity.ok(success(traceabilityService.getAllBlocks()));
+    }
+
+    @PostMapping("/blockchain/rebuild")
+    public ResponseEntity<?> rebuildBlockchain(HttpServletRequest request) {
+        try {
+            String currentUserRole = (String) request.getAttribute("currentUserRole");
+            if (!"ADMIN".equals(currentUserRole)) {
+                return ResponseEntity.status(403).body(error("仅管理员可执行区块链重建"));
+            }
+
+            Map<String, Object> result = traceabilityService.rebuildBlockchainFromDatabase();
+            return ResponseEntity.ok(success("区块链与溯源数据重建成功", result));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("区块链重建失败: " + ex.getMessage()));
+        }
     }
 
     @GetMapping("/verify/block/{blockHash}")
@@ -178,6 +215,15 @@ public class TraceabilityController {
         response.put("valid", valid);
         response.put("message", valid ? "交易验证通过" : "交易验证失败");
         return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/verify/transaction/detail/{transactionId}")
+    public ResponseEntity<?> getTransactionVerificationDetail(@PathVariable String transactionId) {
+        try {
+            return ResponseEntity.ok(success(traceabilityService.getTransactionVerificationDetail(transactionId)));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("获取交易验签详情失败: " + ex.getMessage()));
+        }
     }
 
     @GetMapping("/health")

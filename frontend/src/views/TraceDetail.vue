@@ -17,7 +17,7 @@
             {{ traceData.product?.productName }}
           </el-descriptions-item>
           <el-descriptions-item label="产品类别">
-            {{ traceData.product?.productCategory }}
+            {{ productCategoryLabel(traceData.product?.productCategory) }}
           </el-descriptions-item>
           <el-descriptions-item label="批次号">
             {{ traceData.product?.batchNumber }}
@@ -59,17 +59,28 @@
             <el-card>
               <template #header>
                 <div class="record-header">
-                  <span class="operation-type">{{ record.operationTypeName }}</span>
-                  <el-tag v-if="record.verified" type="success" size="small">
-                    <el-icon><CircleCheck /></el-icon>
-                    已验证
-                  </el-tag>
+                  <span class="operation-type">{{ operationTypeDisplay(record.operationTypeName, record.operationType) }}</span>
+                  <div class="record-tags">
+                    <el-tag v-if="record.verified" type="success" size="small">
+                      <el-icon><CircleCheck /></el-icon>
+                      已验证
+                    </el-tag>
+                    <el-button
+                      v-if="record.transactionId"
+                      link
+                      type="primary"
+                      @click="viewSignature(record.transactionId)"
+                    >
+                      验签详情
+                    </el-button>
+                  </div>
                 </div>
               </template>
               <div class="record-content">
-                <p><strong>操作人：</strong>{{ record.operatorName }}（{{ record.operatorType }}）</p>
+                <p><strong>操作人：</strong>{{ record.operatorName }}（{{ userTypeDisplay(record.operatorTypeName, record.operatorType) }}）</p>
                 <p><strong>操作地点：</strong>{{ record.location }}</p>
                 <p><strong>操作详情：</strong>{{ record.operationDetail }}</p>
+                <p v-if="record.transactionId"><strong>交易 ID：</strong><code>{{ record.transactionId }}</code></p>
                 <div v-if="record.temperature || record.humidity" class="environment-data">
                   <p><strong>环境数据：</strong></p>
                   <el-tag v-if="record.temperature" size="small">温度：{{ record.temperature }}°C</el-tag>
@@ -116,14 +127,16 @@
 
 <script>
 import { onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
+import { operationTypeDisplay, productCategoryLabel, statusLabel, userTypeDisplay } from '../utils/labels'
 
 export default {
   name: 'TraceDetail',
   setup() {
     const route = useRoute()
+    const router = useRouter()
     const store = useStore()
     const loading = ref(false)
     const traceData = ref(null)
@@ -161,18 +174,7 @@ export default {
       return types[status] || 'info'
     }
 
-    const getStatusText = (status) => {
-      const texts = {
-        CREATED: '已创建',
-        PRODUCE: '生产中',
-        PROCESS: '加工中',
-        TRANSPORT: '运输中',
-        STORAGE: '仓储中',
-        SALE: '销售中'
-      }
-      return texts[status] || status || '-'
-    }
-
+    const getStatusText = (status) => statusLabel(status)
     const getTimelineType = (index) => (index === 0 ? 'primary' : '')
 
     const getTimelineColor = (index) => {
@@ -180,16 +182,27 @@ export default {
       return colors[index % colors.length]
     }
 
+    const viewSignature = (transactionId) => {
+      if (!transactionId) {
+        return
+      }
+      router.push(`/verify/transaction/${transactionId}`)
+    }
+
     onMounted(fetchTraceData)
 
     return {
-      loading,
-      traceData,
       formatTime,
-      getStatusType,
       getStatusText,
+      getStatusType,
+      getTimelineColor,
       getTimelineType,
-      getTimelineColor
+      loading,
+      operationTypeDisplay,
+      productCategoryLabel,
+      traceData,
+      userTypeDisplay,
+      viewSignature
     }
   }
 }
@@ -221,6 +234,13 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+}
+
+.record-tags {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .operation-type {
@@ -247,7 +267,8 @@ export default {
   border-radius: 4px;
 }
 
-.blockchain-info code {
+.blockchain-info code,
+.record-content code {
   font-size: 11px;
   word-break: break-all;
 }
@@ -270,5 +291,12 @@ export default {
 .stat-label {
   margin-top: 10px;
   color: #909399;
+}
+
+@media (max-width: 768px) {
+  .record-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 </style>
