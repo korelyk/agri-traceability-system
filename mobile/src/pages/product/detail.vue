@@ -4,7 +4,7 @@
       <view class="title-row">
         <text class="product-name">{{ product.productName }}</text>
         <view class="status-tag" :class="getStatusClass(product.currentStatus)">
-          {{ product.currentStatus }}
+          {{ getStatusText(product.currentStatus) }}
         </view>
       </view>
       <text class="product-desc">{{ product.description }}</text>
@@ -48,7 +48,7 @@
           <view class="timeline-dot"></view>
           <view class="timeline-content">
             <view class="record-header">
-              <text class="op-type">{{ record.operationType }}</text>
+              <text class="op-type">{{ getOperationTypeText(record.operationType) }}</text>
               <text class="op-time">{{ formatDate(record.operationTime) }}</text>
             </view>
             <view class="record-body">
@@ -63,7 +63,7 @@
               </view>
             </view>
             <view class="record-footer">
-              <text class="tx-id">Tx: {{ formatHash(record.transactionId) }}</text>
+              <text class="tx-id">交易: {{ formatHash(record.transactionId) }}</text>
             </view>
           </view>
         </view>
@@ -136,6 +136,31 @@ const formatDate = (dateStr) => {
 const formatHash = (hash) => {
   if (!hash) return ''
   return hash.substring(0, 10) + '...' + hash.substring(hash.length - 8)
+}
+
+const getStatusText = (status) => {
+  const texts = {
+    CREATED: '已创建',
+    PRODUCE: '生产中',
+    PROCESS: '加工中',
+    TRANSPORT: '运输中',
+    STORAGE: '仓储中',
+    SALE: '销售中'
+  }
+  return texts[status] || status || '-'
+}
+
+const getOperationTypeText = (type) => {
+  const texts = {
+    PRODUCE: '生产',
+    PROCESS: '加工',
+    PACKAGE: '包装',
+    STORAGE: '仓储',
+    TRANSPORT: '运输',
+    SALE: '销售',
+    INSPECT: '检测'
+  }
+  return texts[type] || type || '-'
 }
 
 const getStatusClass = (status) => {
