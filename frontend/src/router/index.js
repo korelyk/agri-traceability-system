@@ -17,7 +17,7 @@ const routes = [
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('../views/Dashboard.vue'),
-        meta: { title: '系统概览', icon: 'Odometer' }
+        meta: { title: '系统总览', icon: 'Odometer' }
       },
       {
         path: 'products',
@@ -29,7 +29,7 @@ const routes = [
         path: 'products/register',
         name: 'ProductRegister',
         component: () => import('../views/ProductRegister.vue'),
-        meta: { title: '产品注册', hidden: true }
+        meta: { title: '产品建档', hidden: true }
       },
       {
         path: 'trace',
@@ -60,6 +60,12 @@ const routes = [
         name: 'Blockchain',
         component: () => import('../views/Blockchain.vue'),
         meta: { title: '区块链浏览器', icon: 'Link' }
+      },
+      {
+        path: 'supervision',
+        name: 'Supervision',
+        component: () => import('../views/Supervision.vue'),
+        meta: { title: '质量监管', icon: 'DataAnalysis' }
       },
       {
         path: 'users',

@@ -116,7 +116,8 @@ public class TraceabilityService {
     @Transactional
     public TraceRecord addTraceRecord(String productId, String operationType,
             String operatorId, String location,
-            String operationDetail, String environmentData) {
+            String operationDetail, String environmentData,
+            String qualityCheckResult, String certificateNo, String documentHash) {
         Product product = Optional.ofNullable(productMapper.selectById(productId))
                 .orElseThrow(() -> new RuntimeException("产品不存在"));
         User operator = Optional.ofNullable(userMapper.selectById(operatorId))
@@ -134,6 +135,15 @@ public class TraceabilityService {
         if (environmentData != null && !environmentData.isBlank()) {
             parseEnvironmentData(record, environmentData);
         }
+        record.setQualityCheckResult(normalizeText(qualityCheckResult));
+        record.setCertificateNo(normalizeText(certificateNo));
+        record.setDocumentHash(resolveDocumentHash(
+                productId,
+                operationType,
+                operationDetail,
+                record.getQualityCheckResult(),
+                record.getCertificateNo(),
+                documentHash));
 
         Transaction transaction = createTransaction(product, record, operator);
         String signature = digitalSignature.signTransaction(
@@ -141,6 +151,7 @@ public class TraceabilityService {
                 keySecurityService.decrypt(operator.getPrivateKey()));
         transaction.setDigitalSignature(signature);
         record.setSignature(signature, operator.getPublicKey());
+        record.setVerified(digitalSignature.verifyTransaction(transaction));
 
         blockchain.addTransaction(transaction);
         Block newBlock = blockchain.minePendingTransactions(operatorId);
@@ -162,6 +173,7 @@ public class TraceabilityService {
                 new LambdaQueryWrapper<TraceRecord>()
                         .eq(TraceRecord::getProductId, productId)
                         .orderByAsc(TraceRecord::getOperationTime));
+        refreshVerificationFlags(dbRecords);
 
         List<Transaction> blockchainRecords = blockchain.getProductTraceHistory(productId);
 
@@ -171,6 +183,7 @@ public class TraceabilityService {
         result.put("blockchainRecords", blockchainRecords);
         result.put("dataConsistent", verifyDataConsistency(dbRecords, blockchainRecords));
         result.put("blockchainValid", blockchain.isChainValid());
+        result.put("trustSummary", buildTrustSummary(product, dbRecords, blockchainRecords));
 
         Map<String, Object> statistics = new HashMap<>();
         statistics.put("totalRecords", dbRecords.size());
@@ -223,6 +236,9 @@ public class TraceabilityService {
         transaction.setEnvironmentData(record.getEnvironmentData());
         transaction.setTemperature(record.getTemperature());
         transaction.setHumidity(record.getHumidity());
+        transaction.setInspectionResult(record.getQualityCheckResult());
+        transaction.setCertificateNo(record.getCertificateNo());
+        transaction.setDocumentHash(record.getDocumentHash());
         transaction.setTransactionHash(transaction.calculateHash());
         return transaction;
     }
@@ -292,6 +308,8 @@ public class TraceabilityService {
 
     public Map<String, Object> getSystemStatistics() {
         Map<String, Object> stats = new HashMap<>();
+        List<TraceRecord> traceRecords = traceRecordMapper.selectList(null);
+        refreshVerificationFlags(traceRecords);
         stats.put("totalProducts", productMapper.selectCount(null));
         stats.put("productsByCategory", toLongMap(productMapper.countByCategory(), "category"));
         stats.put("productsByStatus", toLongMap(productMapper.countByStatus(), "status"));
@@ -300,8 +318,106 @@ public class TraceabilityService {
         stats.put("totalUsers", userMapper.selectCount(null));
         stats.put("usersByType", userMapper.selectList(null).stream()
                 .collect(Collectors.groupingBy(User::getUserType, Collectors.counting())));
+        stats.put("verifiedTraceRecords", traceRecords.stream().filter(TraceRecord::isVerified).count());
+        stats.put("inspectionRecords", traceRecords.stream().filter(this::isInspectionRecord).count());
+        stats.put("passedInspectionRecords", traceRecords.stream()
+                .filter(record -> isInspectionRecord(record) && isInspectionPassed(record.getQualityCheckResult()))
+                .count());
         stats.putAll(blockchain.getStatistics());
         return stats;
+    }
+
+    public Map<String, Object> getSupervisionOverview() {
+        List<Product> products = productMapper.selectList(new LambdaQueryWrapper<Product>()
+                .orderByDesc(Product::getCreatedAt));
+        List<TraceRecord> traceRecords = traceRecordMapper.selectList(new LambdaQueryWrapper<TraceRecord>()
+                .orderByDesc(TraceRecord::getOperationTime)
+                .orderByDesc(TraceRecord::getCreatedAt));
+        refreshVerificationFlags(traceRecords);
+
+        Map<String, Product> productsById = products.stream()
+                .filter(product -> product.getProductId() != null)
+                .collect(Collectors.toMap(
+                        Product::getProductId,
+                        product -> product,
+                        (left, right) -> left));
+
+        Map<String, List<TraceRecord>> recordsByProduct = traceRecords.stream()
+                .filter(record -> record.getProductId() != null)
+                .collect(Collectors.groupingBy(TraceRecord::getProductId));
+
+        boolean chainValid = blockchain.isChainValid();
+        long totalInspectionRecords = traceRecords.stream().filter(this::isInspectionRecord).count();
+        long passedInspectionRecords = traceRecords.stream()
+                .filter(record -> isInspectionRecord(record) && isInspectionPassed(record.getQualityCheckResult()))
+                .count();
+        long failedInspectionRecords = traceRecords.stream()
+                .filter(record -> isInspectionRecord(record)
+                        && hasDisplayText(record.getQualityCheckResult())
+                        && !isInspectionPassed(record.getQualityCheckResult()))
+                .count();
+        long signatureVerifiedRecords = traceRecords.stream().filter(TraceRecord::isVerified).count();
+
+        List<Map<String, Object>> warningProducts = new ArrayList<>();
+        int trustedProducts = 0;
+
+        for (Product product : products) {
+            List<TraceRecord> productRecords = recordsByProduct.getOrDefault(product.getProductId(), new ArrayList<>());
+            List<Transaction> blockchainRecords = blockchain.getProductTraceHistory(product.getProductId());
+            Map<String, Object> trustSummary = buildTrustSummary(product, productRecords, blockchainRecords);
+
+            if ("LOW".equals(trustSummary.get("riskLevel"))) {
+                trustedProducts++;
+                continue;
+            }
+
+            Map<String, Object> warning = new LinkedHashMap<>();
+            warning.put("productId", product.getProductId());
+            warning.put("productName", product.getProductName());
+            warning.put("producerName", product.getProducerName());
+            warning.put("origin", product.getOrigin());
+            warning.put("currentStatus", product.getCurrentStatus());
+            warning.put("riskLevel", trustSummary.get("riskLevel"));
+            warning.put("issues", trustSummary.get("issues"));
+            warning.put("suggestion", trustSummary.get("suggestion"));
+            warning.put("latestInspection", trustSummary.get("latestInspection"));
+            warning.put("latestOperation", trustSummary.get("latestOperation"));
+            warning.put("dataConsistent", trustSummary.get("dataConsistent"));
+            warning.put("chainValid", trustSummary.get("chainValid"));
+            warningProducts.add(warning);
+        }
+
+        warningProducts.sort((left, right) -> Integer.compare(
+                riskLevelOrder(String.valueOf(right.get("riskLevel"))),
+                riskLevelOrder(String.valueOf(left.get("riskLevel")))));
+
+        List<Map<String, Object>> recentInspections = traceRecords.stream()
+                .filter(this::isInspectionRecord)
+                .sorted((left, right) -> compareTraceRecordTime(right, left))
+                .limit(8)
+                .map(record -> toInspectionSummary(record, productsById.get(record.getProductId())))
+                .collect(Collectors.toList());
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("totalProducts", products.size());
+        summary.put("totalTraceRecords", traceRecords.size());
+        summary.put("signatureVerifiedRecords", signatureVerifiedRecords);
+        summary.put("totalInspectionRecords", totalInspectionRecords);
+        summary.put("passedInspectionRecords", passedInspectionRecords);
+        summary.put("failedInspectionRecords", failedInspectionRecords);
+        summary.put("warningProducts", warningProducts.size());
+        summary.put("trustedProducts", trustedProducts);
+        summary.put("chainValid", chainValid);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("summary", summary);
+        result.put("recentInspections", recentInspections);
+        result.put("warningProducts", warningProducts);
+        result.put("governanceFocus", List.of(
+                "业务主体录入关键流转信息后，由系统完成数字签名，保证记录来源可验证。",
+                "检测结果、证书编号和文档哈希随溯源记录一并保存，便于监管抽查与责任追溯。",
+                "系统持续比对数据库与链上交易，发现缺少检测、验签失败或链路异常时自动预警。"));
+        return result;
     }
 
     private Map<String, Long> toLongMap(List<Map<String, Object>> source, String keyName) {
@@ -637,6 +753,186 @@ public class TraceabilityService {
 
     private boolean sameText(String left, String right) {
         return Objects.equals(left, right);
+    }
+
+    private void refreshVerificationFlags(List<TraceRecord> records) {
+        for (TraceRecord record : records) {
+            if (record.getTransactionId() == null || record.getTransactionId().isBlank()) {
+                continue;
+            }
+            Transaction transaction = blockchain.findTransaction(record.getTransactionId());
+            record.setVerified(transaction != null && digitalSignature.verifyTransaction(transaction));
+        }
+    }
+
+    private Map<String, Object> buildTrustSummary(Product product, List<TraceRecord> dbRecords, List<Transaction> blockchainRecords) {
+        boolean dataConsistent = verifyDataConsistency(dbRecords, blockchainRecords);
+        boolean chainValid = blockchain.isChainValid();
+        TraceRecord latestInspection = findLatestInspection(dbRecords);
+        TraceRecord latestRecord = findLatestRecord(dbRecords);
+
+        List<String> issues = new ArrayList<>();
+        if (!dataConsistent) {
+            issues.add("链上交易与数据库记录不一致");
+        }
+        if (!chainValid) {
+            issues.add("区块链状态异常");
+        }
+        if (latestInspection == null) {
+            issues.add("缺少检测记录");
+        } else {
+            if (!isInspectionPassed(latestInspection.getQualityCheckResult())) {
+                issues.add("最新检测结果未通过");
+            }
+            if (!latestInspection.isVerified()) {
+                issues.add("最新检测记录未通过签名验证");
+            }
+        }
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("productId", product == null ? null : product.getProductId());
+        summary.put("dataConsistent", dataConsistent);
+        summary.put("chainValid", chainValid);
+        summary.put("verifiedRecords", dbRecords.stream().filter(TraceRecord::isVerified).count());
+        summary.put("inspectionRecords", dbRecords.stream().filter(this::isInspectionRecord).count());
+        summary.put("latestInspection", latestInspection == null ? null : toInspectionSummary(latestInspection, product));
+        summary.put("latestOperation", latestRecord == null ? null : buildLatestOperationSummary(latestRecord));
+        summary.put("issues", issues);
+        summary.put("riskLevel", issues.isEmpty() ? "LOW" : determineRiskLevel(issues));
+        summary.put("suggestion", issues.isEmpty()
+                ? "当前溯源记录、签名校验和检测信息完整，可直接用于公开查询和监管抽查。"
+                : buildSuggestion(issues));
+        return summary;
+    }
+
+    private Map<String, Object> toInspectionSummary(TraceRecord record, Product product) {
+        Map<String, Object> inspection = new LinkedHashMap<>();
+        inspection.put("recordId", record.getRecordId());
+        inspection.put("productId", record.getProductId());
+        inspection.put("productName", product == null ? null : product.getProductName());
+        inspection.put("qualityCheckResult", record.getQualityCheckResult());
+        inspection.put("certificateNo", record.getCertificateNo());
+        inspection.put("documentHash", record.getDocumentHash());
+        inspection.put("verified", record.isVerified());
+        inspection.put("operatorName", record.getOperatorName());
+        inspection.put("location", record.getLocation());
+        inspection.put("operationTime", record.getOperationTime());
+        inspection.put("transactionId", record.getTransactionId());
+        inspection.put("operationDetail", record.getOperationDetail());
+        return inspection;
+    }
+
+    private Map<String, Object> buildLatestOperationSummary(TraceRecord record) {
+        Map<String, Object> latest = new LinkedHashMap<>();
+        latest.put("operationType", record.getOperationType());
+        latest.put("operationDetail", record.getOperationDetail());
+        latest.put("location", record.getLocation());
+        latest.put("operationTime", record.getOperationTime());
+        latest.put("verified", record.isVerified());
+        latest.put("transactionId", record.getTransactionId());
+        return latest;
+    }
+
+    private TraceRecord findLatestInspection(List<TraceRecord> records) {
+        return records.stream()
+                .filter(this::isInspectionRecord)
+                .max(this::compareTraceRecordTime)
+                .orElse(null);
+    }
+
+    private TraceRecord findLatestRecord(List<TraceRecord> records) {
+        return records.stream()
+                .max(this::compareTraceRecordTime)
+                .orElse(null);
+    }
+
+    private int compareTraceRecordTime(TraceRecord left, TraceRecord right) {
+        LocalDateTime leftTime = left.getOperationTime() != null ? left.getOperationTime() : left.getCreatedAt();
+        LocalDateTime rightTime = right.getOperationTime() != null ? right.getOperationTime() : right.getCreatedAt();
+        if (leftTime == null && rightTime == null) {
+            return 0;
+        }
+        if (leftTime == null) {
+            return -1;
+        }
+        if (rightTime == null) {
+            return 1;
+        }
+        return leftTime.compareTo(rightTime);
+    }
+
+    private boolean isInspectionRecord(TraceRecord record) {
+        return record != null && "INSPECT".equalsIgnoreCase(record.getOperationType());
+    }
+
+    private boolean isInspectionPassed(String qualityCheckResult) {
+        String text = normalizeText(qualityCheckResult);
+        if (text == null) {
+            return false;
+        }
+        String upper = text.toUpperCase();
+        return upper.contains("PASS")
+                || upper.contains("QUALIFIED")
+                || text.contains("合格")
+                || text.contains("通过");
+    }
+
+    private String determineRiskLevel(List<String> issues) {
+        for (String issue : issues) {
+            if (issue.contains("不一致") || issue.contains("异常") || issue.contains("未通过")) {
+                return "HIGH";
+            }
+        }
+        return "MEDIUM";
+    }
+
+    private int riskLevelOrder(String riskLevel) {
+        if ("HIGH".equalsIgnoreCase(riskLevel)) {
+            return 3;
+        }
+        if ("MEDIUM".equalsIgnoreCase(riskLevel)) {
+            return 2;
+        }
+        return 1;
+    }
+
+    private String buildSuggestion(List<String> issues) {
+        if (issues.stream().anyMatch(issue -> issue.contains("不一致") || issue.contains("异常"))) {
+            return "建议优先核查链状态、交易哈希与数据库记录，必要时执行链重建或人工复核。";
+        }
+        if (issues.stream().anyMatch(issue -> issue.contains("未通过"))) {
+            return "建议暂停该批次继续流转，补充复检记录，并保留责任主体与检测凭证。";
+        }
+        return "建议在“新增溯源记录”中选择“检测”操作，补录检测结果、证书编号和监管材料，形成完整的可追溯闭环。";
+    }
+
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String resolveDocumentHash(String productId, String operationType, String operationDetail,
+            String qualityCheckResult, String certificateNo, String documentHash) {
+        String explicitHash = normalizeText(documentHash);
+        if (explicitHash != null) {
+            return explicitHash;
+        }
+        if (!"INSPECT".equalsIgnoreCase(operationType)
+                && qualityCheckResult == null
+                && certificateNo == null) {
+            return null;
+        }
+
+        String payload = String.join("|",
+                Optional.ofNullable(productId).orElse(""),
+                Optional.ofNullable(operationType).orElse(""),
+                Optional.ofNullable(operationDetail).orElse(""),
+                Optional.ofNullable(qualityCheckResult).orElse(""),
+                Optional.ofNullable(certificateNo).orElse(""));
+        return digitalSignature.calculateHash(payload);
     }
 
     private List<Block> enrichBlocksForDisplay(List<Block> sourceBlocks) {

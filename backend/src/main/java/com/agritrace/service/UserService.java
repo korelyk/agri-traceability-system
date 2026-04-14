@@ -105,16 +105,29 @@ public class UserService {
         User user = getUserById(userId);
 
         if (updates.containsKey("realName")) {
-            user.setRealName(updates.get("realName"));
+            user.setRealName(normalizeText(updates.get("realName")));
         }
         if (updates.containsKey("email")) {
-            user.setEmail(updates.get("email"));
+            user.setEmail(normalizeText(updates.get("email")));
         }
         if (updates.containsKey("phone")) {
-            user.setPhone(updates.get("phone"));
+            user.setPhone(normalizeText(updates.get("phone")));
         }
         if (updates.containsKey("companyName")) {
-            user.setCompanyName(updates.get("companyName"));
+            user.setCompanyName(normalizeText(updates.get("companyName")));
+        }
+        if (updates.containsKey("userType")) {
+            user.setUserType(normalizeText(updates.get("userType")));
+        }
+        if (updates.containsKey("verified")) {
+            user.setVerified(Boolean.parseBoolean(updates.get("verified")));
+        }
+        if (updates.containsKey("active")) {
+            user.setActive(Boolean.parseBoolean(updates.get("active")));
+        }
+        if (updates.containsKey("role")) {
+            String role = normalizeText(updates.get("role"));
+            user.setRole(role == null ? user.getRole() : role.toUpperCase());
         }
 
         userMapper.updateById(user);
@@ -185,5 +198,13 @@ public class UserService {
 
     private boolean isEncodedPassword(String password) {
         return password.startsWith("$2a$") || password.startsWith("$2b$") || password.startsWith("$2y$");
+    }
+
+    private String normalizeText(String value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.trim();
+        return text.isEmpty() ? null : text;
     }
 }

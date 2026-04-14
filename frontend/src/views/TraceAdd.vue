@@ -3,7 +3,7 @@
     <el-card>
       <template #header>
         <div class="card-header">
-          <span>添加溯源记录</span>
+          <span>新增溯源记录</span>
         </div>
       </template>
 
@@ -51,7 +51,7 @@
             v-model="form.operationDetail"
             type="textarea"
             :rows="4"
-            placeholder="请输入操作详情"
+            placeholder="请输入本次流转或处理的详细说明"
           />
         </el-form-item>
 
@@ -64,8 +64,38 @@
           />
         </el-form-item>
 
+        <template v-if="form.operationType === 'INSPECT'">
+          <el-divider content-position="left">检测与监管信息</el-divider>
+
+          <el-alert
+            type="info"
+            :closable="false"
+            class="inspect-alert"
+            title="检测记录会进入监管视图，并同步展示证书编号与文档哈希，便于老师查看系统的监管与存证能力。"
+          />
+
+          <el-form-item label="检测结果" prop="qualityCheckResult">
+            <el-select v-model="form.qualityCheckResult" placeholder="请选择检测结果" style="width: 100%">
+              <el-option label="合格" value="合格" />
+              <el-option label="复检中" value="复检中" />
+              <el-option label="不合格" value="不合格" />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="证书编号">
+            <el-input v-model="form.certificateNo" placeholder="请输入检测证书或报告编号" />
+          </el-form-item>
+
+          <el-form-item label="文档哈希">
+            <el-input
+              v-model="form.documentHash"
+              placeholder="可选。不填写时系统会根据检测信息自动生成文档哈希"
+            />
+          </el-form-item>
+        </template>
+
         <el-form-item>
-          <el-button type="primary" :loading="loading" @click="handleSubmit">添加记录</el-button>
+          <el-button type="primary" :loading="loading" @click="handleSubmit">提交记录</el-button>
           <el-button @click="$router.back()">返回</el-button>
         </el-form-item>
       </el-form>
@@ -74,8 +104,8 @@
 </template>
 
 <script>
-import { onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useStore } from 'vuex'
 import { ElMessage } from 'element-plus'
 import { userTypeDisplay } from '../utils/labels'
@@ -88,6 +118,7 @@ export default {
   name: 'TraceAdd',
   setup() {
     const store = useStore()
+    const route = useRoute()
     const router = useRouter()
     const formRef = ref(null)
     const loading = ref(false)
@@ -100,7 +131,10 @@ export default {
       operatorId: '',
       location: '',
       operationDetail: '',
-      environmentData: ''
+      environmentData: '',
+      qualityCheckResult: '',
+      certificateNo: '',
+      documentHash: ''
     })
 
     const rules = {
@@ -108,7 +142,17 @@ export default {
       operationType: [{ required: true, message: '请选择操作类型', trigger: 'change' }],
       operatorId: [{ required: true, message: '请选择操作人', trigger: 'change' }],
       location: [{ required: true, message: '请输入操作地点', trigger: 'blur' }],
-      operationDetail: [{ required: true, message: '请输入操作详情', trigger: 'blur' }]
+      operationDetail: [{ required: true, message: '请输入操作详情', trigger: 'blur' }],
+      qualityCheckResult: [{
+        validator: (_, value, callback) => {
+          if (form.operationType === 'INSPECT' && !value) {
+            callback(new Error('请选择检测结果'))
+            return
+          }
+          callback()
+        },
+        trigger: 'change'
+      }]
     }
 
     const operatorLabel = (user) => {
@@ -136,6 +180,17 @@ export default {
       }
     }
 
+    const applyRoutePrefill = () => {
+      const productId = typeof route.query.productId === 'string' ? route.query.productId : ''
+      const operationType = typeof route.query.operationType === 'string' ? route.query.operationType : ''
+      if (productId) {
+        form.productId = productId
+      }
+      if (operationType) {
+        form.operationType = operationType
+      }
+    }
+
     const handleSubmit = async () => {
       const valid = await formRef.value.validate().catch(() => false)
       if (!valid) {
@@ -154,7 +209,19 @@ export default {
       }
     }
 
-    onMounted(fetchPageData)
+    watch(() => form.operationType, (value) => {
+      if (value === 'INSPECT') {
+        return
+      }
+      form.qualityCheckResult = ''
+      form.certificateNo = ''
+      form.documentHash = ''
+    })
+
+    onMounted(async () => {
+      await fetchPageData()
+      applyRoutePrefill()
+    })
 
     return {
       form,
@@ -181,5 +248,9 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.inspect-alert {
+  margin-bottom: 18px;
 }
 </style>

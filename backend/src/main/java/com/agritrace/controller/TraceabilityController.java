@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -83,7 +84,10 @@ public class TraceabilityController {
                     operatorId,
                     getString(request, "location"),
                     getString(request, "operationDetail"),
-                    buildEnvironmentData(request));
+                    buildEnvironmentData(request),
+                    getString(request, "qualityCheckResult"),
+                    getString(request, "certificateNo"),
+                    getString(request, "documentHash"));
 
             return ResponseEntity.ok(success("溯源记录添加成功", record));
         } catch (Exception ex) {
@@ -167,6 +171,47 @@ public class TraceabilityController {
         }
     }
 
+    @PutMapping("/users/{userId}")
+    public ResponseEntity<?> updateUser(@PathVariable String userId,
+            @RequestBody Map<String, Object> request,
+            HttpServletRequest httpRequest) {
+        try {
+            String currentUserId = (String) httpRequest.getAttribute("currentUserId");
+            String currentUserRole = (String) httpRequest.getAttribute("currentUserRole");
+
+            if (!"ADMIN".equals(currentUserRole)) {
+                return ResponseEntity.status(403).body(error("仅管理员可修改用户"));
+            }
+
+            Map<String, String> updates = new HashMap<>();
+            copyIfPresent(request, updates, "realName");
+            copyIfPresent(request, updates, "email");
+            copyIfPresent(request, updates, "phone");
+            copyIfPresent(request, updates, "companyName");
+            copyIfPresent(request, updates, "userType");
+            copyIfPresent(request, updates, "role");
+            copyIfPresent(request, updates, "verified");
+            copyIfPresent(request, updates, "active");
+
+            if (userId != null && userId.equals(currentUserId)) {
+                if ("false".equalsIgnoreCase(updates.get("active"))) {
+                    return ResponseEntity.badRequest().body(error("不能停用当前登录用户"));
+                }
+                if (updates.containsKey("role") && !"ADMIN".equalsIgnoreCase(updates.get("role"))) {
+                    return ResponseEntity.badRequest().body(error("不能取消当前登录用户的管理员角色"));
+                }
+                if (updates.containsKey("userType") && !"ADMIN".equalsIgnoreCase(updates.get("userType"))) {
+                    return ResponseEntity.badRequest().body(error("不能修改当前登录用户的管理员类型"));
+                }
+            }
+
+            User updatedUser = userService.updateUser(userId, updates);
+            return ResponseEntity.ok(success("用户更新成功", userService.toUserView(updatedUser)));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(error("用户更新失败: " + ex.getMessage()));
+        }
+    }
+
     @GetMapping("/statistics")
     public ResponseEntity<?> getStatistics() {
         return ResponseEntity.ok(success(traceabilityService.getSystemStatistics()));
@@ -175,6 +220,11 @@ public class TraceabilityController {
     @GetMapping("/blockchain/statistics")
     public ResponseEntity<?> getBlockchainStatistics() {
         return ResponseEntity.ok(success(traceabilityService.getBlockchainStatistics()));
+    }
+
+    @GetMapping("/supervision/overview")
+    public ResponseEntity<?> getSupervisionOverview() {
+        return ResponseEntity.ok(success(traceabilityService.getSupervisionOverview()));
     }
 
     @GetMapping("/blockchain/blocks")
@@ -290,5 +340,11 @@ public class TraceabilityController {
             payload.put("humidity", humidity);
         }
         return gson.toJson(payload);
+    }
+
+    private void copyIfPresent(Map<String, Object> source, Map<String, String> target, String key) {
+        if (source.containsKey(key)) {
+            target.put(key, getString(source, key));
+        }
     }
 }

@@ -93,6 +93,14 @@ export default createStore({
       }
     },
 
+    async fetchSupervisionOverview() {
+      try {
+        return await request.get('/supervision/overview')
+      } catch (error) {
+        return { success: false, message: errorMessage(error, '获取质量监管概览失败') }
+      }
+    },
+
     async fetchBlocks() {
       try {
         return await request.get('/blockchain/blocks')
@@ -146,6 +154,18 @@ export default createStore({
         return await request.get('/users')
       } catch (error) {
         return { success: false, message: errorMessage(error, '获取用户失败') }
+      }
+    },
+
+    async updateUser({ state, commit }, { userId, userData }) {
+      try {
+        const result = await request.put(`/users/${userId}`, userData)
+        if (result.success && result.data?.userId === state.user?.userId) {
+          commit('SET_USER', result.data)
+        }
+        return result
+      } catch (error) {
+        return { success: false, message: errorMessage(error, '更新用户失败') }
       }
     },
 

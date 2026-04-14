@@ -4,7 +4,7 @@
       <template #header>
         <div class="card-header">
           <span>用户管理</span>
-          <el-button type="primary" @click="showRegisterDialog = true">
+          <el-button v-if="isAdmin" type="primary" @click="showRegisterDialog = true">
             <el-icon><Plus /></el-icon>
             添加用户
           </el-button>
@@ -36,10 +36,18 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180">
+        <el-table-column label="操作" width="230">
           <template #default="{ row }">
             <el-button link type="primary" @click="viewUser(row)">
               查看
+            </el-button>
+            <el-button
+              v-if="canEditUser(row)"
+              link
+              type="primary"
+              @click="openEditDialog(row)"
+            >
+              编辑
             </el-button>
             <el-button
               v-if="canDeleteUser(row)"
@@ -102,11 +110,70 @@
         <el-descriptions-item label="区块链地址">{{ selectedUser.blockchainAddress || '-' }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
+
+    <el-dialog v-model="showEditDialog" title="编辑用户" width="560px">
+      <el-form ref="editFormRef" :model="editUser" :rules="editRules" label-width="100px">
+        <el-form-item label="用户名">
+          <el-input :model-value="editUser.username" disabled />
+        </el-form-item>
+        <el-form-item label="姓名" prop="realName">
+          <el-input v-model="editUser.realName" />
+        </el-form-item>
+        <el-form-item label="用户类型" prop="userType">
+          <el-select v-model="editUser.userType" style="width: 100%">
+            <el-option label="生产者" value="PRODUCER" />
+            <el-option label="加工商" value="PROCESSOR" />
+            <el-option label="物流商" value="LOGISTICS" />
+            <el-option label="销售商" value="RETAILER" />
+            <el-option label="检测机构" value="INSPECTOR" />
+            <el-option label="管理员" value="ADMIN" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="公司名称">
+          <el-input v-model="editUser.companyName" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="editUser.email" />
+        </el-form-item>
+        <el-form-item label="电话">
+          <el-input v-model="editUser.phone" />
+        </el-form-item>
+        <el-form-item label="角色" prop="role">
+          <el-select v-model="editUser.role" style="width: 100%">
+            <el-option label="管理员" value="ADMIN" />
+            <el-option label="业务操作员" value="OPERATOR" />
+            <el-option label="普通用户" value="USER" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="认证状态">
+          <el-switch
+            v-model="editUser.verified"
+            inline-prompt
+            active-text="已认证"
+            inactive-text="未认证"
+          />
+        </el-form-item>
+        <el-form-item label="启用状态">
+          <el-switch
+            v-model="editUser.active"
+            inline-prompt
+            active-text="启用"
+            inactive-text="停用"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showEditDialog = false">取消</el-button>
+        <el-button type="primary" :loading="editing" @click="handleUpdateUser">
+          保存修改
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useStore } from 'vuex'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { roleLabel, userTypeDisplay } from '../utils/labels'
@@ -119,13 +186,17 @@ export default {
   name: 'Users',
   setup() {
     const store = useStore()
+    const isAdmin = computed(() => store.getters.isAdmin)
     const users = ref([])
     const loading = ref(false)
     const showRegisterDialog = ref(false)
     const showDetailDialog = ref(false)
+    const showEditDialog = ref(false)
     const adding = ref(false)
+    const editing = ref(false)
     const deletingUserId = ref('')
     const userFormRef = ref(null)
+    const editFormRef = ref(null)
     const selectedUser = ref(null)
 
     const newUser = reactive({
@@ -144,12 +215,44 @@ export default {
       companyName: [{ required: true, message: '请输入公司名称', trigger: 'blur' }]
     }
 
+    const editUser = reactive({
+      userId: '',
+      username: '',
+      realName: '',
+      userType: '',
+      companyName: '',
+      email: '',
+      phone: '',
+      role: '',
+      verified: false,
+      active: true
+    })
+
+    const editRules = {
+      realName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+      userType: [{ required: true, message: '请选择用户类型', trigger: 'change' }],
+      role: [{ required: true, message: '请选择角色', trigger: 'change' }]
+    }
+
     const resetForm = () => {
       newUser.username = ''
       newUser.password = ''
       newUser.realName = ''
       newUser.userType = ''
       newUser.companyName = ''
+    }
+
+    const fillEditForm = (user) => {
+      editUser.userId = user.userId
+      editUser.username = user.username
+      editUser.realName = user.realName || ''
+      editUser.userType = user.userType || ''
+      editUser.companyName = user.companyName || ''
+      editUser.email = user.email || ''
+      editUser.phone = user.phone || ''
+      editUser.role = user.role || 'OPERATOR'
+      editUser.verified = !!user.verified
+      editUser.active = user.active !== false
     }
 
     const fetchUsers = async () => {
@@ -186,6 +289,47 @@ export default {
     const viewUser = (user) => {
       selectedUser.value = user
       showDetailDialog.value = true
+    }
+
+    const canEditUser = () => store.getters.isAdmin
+
+    const openEditDialog = (user) => {
+      fillEditForm(user)
+      showEditDialog.value = true
+    }
+
+    const handleUpdateUser = async () => {
+      const valid = await editFormRef.value.validate().catch(() => false)
+      if (!valid) {
+        return
+      }
+
+      editing.value = true
+      const result = await store.dispatch('updateUser', {
+        userId: editUser.userId,
+        userData: {
+          realName: editUser.realName,
+          userType: editUser.userType,
+          companyName: editUser.companyName,
+          email: editUser.email,
+          phone: editUser.phone,
+          role: editUser.role,
+          verified: editUser.verified,
+          active: editUser.active
+        }
+      })
+      editing.value = false
+
+      if (result.success) {
+        ElMessage.success(result.message || '用户更新成功')
+        showEditDialog.value = false
+        if (selectedUser.value?.userId === editUser.userId) {
+          selectedUser.value = result.data
+        }
+        fetchUsers()
+      } else {
+        ElMessage.error(result.message)
+      }
     }
 
     const canDeleteUser = (user) => {
@@ -234,22 +378,31 @@ export default {
 
     return {
       users,
+      isAdmin,
       loading,
       showRegisterDialog,
       showDetailDialog,
+      showEditDialog,
       adding,
+      editing,
       deletingUserId,
       userFormRef,
+      editFormRef,
       selectedUser,
       newUser,
       userRules,
+      editUser,
+      editRules,
       readableValue,
       roleLabel,
       shortAddress,
       userTypeDisplay,
+      canEditUser,
       canDeleteUser,
       handleAddUser,
       handleDeleteUser,
+      handleUpdateUser,
+      openEditDialog,
       viewUser
     }
   }

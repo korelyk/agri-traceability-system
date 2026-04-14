@@ -21,7 +21,9 @@ export const STATUS_LABELS = {
   PROCESS: '加工中',
   TRANSPORT: '运输中',
   STORAGE: '仓储中',
-  SALE: '销售中'
+  SALE: '销售中',
+  INSPECT: '检测中',
+  PACKAGE: '包装中'
 }
 
 export const OPERATION_TYPE_LABELS = {
